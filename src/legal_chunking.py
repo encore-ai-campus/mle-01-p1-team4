@@ -12,12 +12,19 @@ RELATED_ARTICLE_PATTERN = re.compile(
     r"\((제\s*\d+\s*조(?:의\s*\d+)?)\s*관련\)"
 )
 SUBSECTION_PATTERN = re.compile(
-    r"(?m)^[ \t]*#{1,6}[ \t]*(\d+\.[ \t]*[^\n<]+)[ \t]*$"
+    r"(?m)^[ \t]*(?:#{1,6}[ \t]*)?(\d+\.[ \t]*[^\n<]+?)[ \t]*$"
 )
 ARTICLE_PARTS_PATTERN = re.compile(
     r"(제\s*\d+\s*조(?:의\s*\d+)?)\s*(?:\(([^)]+)\))?"
 )
-
+SECTION_BOUNDARY_PATTERN = re.compile(
+    r"(?m)^[ \t]*(?:"
+    r"#{0,6}[ \t]*부\s*칙"
+    r"|부칙\s*\("
+    r"|\[별표[^\]]*\]"
+    r"|\[별지[^\]]*\]"
+    r")"
+)
 
 def _clean_text(text: str) -> str:
     soup = BeautifulSoup(text, "html.parser")
@@ -129,92 +136,200 @@ def _build_page_content(chunk: dict[str, Any]) -> str:
     return normalized
 
 
-def _make_main_chunk(source: dict[str, Any], content: str) -> dict[str, Any]:
+def _make_main_chunk(
+    source: dict[str, Any],
+    content: str,
+) -> dict[str, Any]:
     chunk = deepcopy(source)
+
     chunk["content"] = content.strip()
     chunk["raw_content"] = content.strip()
-    article_no, article_title = parse_article(chunk.get("article"))
+
+    article_no, article_title = parse_article(
+        chunk.get("article")
+    )
+
     chunk["article_no"] = article_no
     chunk["article_title"] = article_title
+
+    paragraph = chunk.get("paragraph")
+
+    # 기존 parser가 별지의 ①②③ 등을 항으로 잘못 넣은 경우 제거
+    if paragraph and paragraph not in content:
+        chunk["paragraph"] = None
+
     chunk["section_type"] = "main"
-    chunk["chunk_type"] = "paragraph" if chunk.get("paragraph") else "article"
+    chunk["chunk_type"] = (
+        "paragraph"
+        if chunk.get("paragraph")
+        else "article"
+    )
+
     chunk["appendix_no"] = None
     chunk["appendix_title"] = None
     chunk["subsection"] = None
     chunk["related_article"] = None
-    chunk["page_content"] = _build_page_content(chunk)
+
+    chunk["page_content"] = _build_page_content(
+        chunk
+    )
+
     return chunk
 
 
-def _make_appendix_chunks(source: dict[str, Any], appendix_block: str, appendix_no: str) -> list[dict[str, Any]]:
-    body = appendix_block.splitlines()
-    body_text = "\n".join(body[1:]).strip() if body else ""
+def _make_appendix_chunks(
+    source: dict[str, Any],
+    appendix_block: str,
+    appendix_no: str,
+) -> list[dict[str, Any]]:
+    lines = appendix_block.splitlines()
+    body_text = "\n".join(lines[1:]).strip() if lines else ""
+
     appendix_title, related_article = _extract_appendix_title(body_text)
     subsection_matches = list(SUBSECTION_PATTERN.finditer(body_text))
 
     chunks: list[dict[str, Any]] = []
+
+    # 하위 구분이 없는 별표
     if not subsection_matches:
         chunk = deepcopy(source)
+
         chunk["chapter"] = None
         chunk["article"] = None
         chunk["paragraph"] = None
         chunk["article_no"] = None
         chunk["article_title"] = None
+
         chunk["section_type"] = "appendix"
-        chunk["chunk_type"] = "table" if TABLE_PATTERN.search(appendix_block) else "appendix"
+        chunk["chunk_type"] = (
+            "table"
+            if TABLE_PATTERN.search(appendix_block)
+            else "appendix"
+        )
+
         chunk["appendix_no"] = appendix_no
         chunk["appendix_title"] = appendix_title
         chunk["subsection"] = None
         chunk["related_article"] = related_article
+
         chunk["content"] = appendix_block.strip()
         chunk["raw_content"] = appendix_block.strip()
         chunk["page_content"] = _build_page_content(chunk)
+
         return [chunk]
 
-    prefix = body_text[:subsection_matches[0].start()].strip()
+    # 별표 제목 부분만 공통 정보로 보존
+    header_text = body_text[:subsection_matches[0].start()].strip()
+
     for index, match in enumerate(subsection_matches):
         start = match.start()
-        end = subsection_matches[index + 1].start() if index + 1 < len(subsection_matches) else len(body_text)
+
+        end = (
+            subsection_matches[index + 1].start()
+            if index + 1 < len(subsection_matches)
+            else len(body_text)
+        )
+
+        # 현재 subsection만 포함
         subsection_text = body_text[start:end].strip()
-        raw_content = f"{prefix}\n\n{subsection_text}".strip() if prefix else subsection_text
+
+        if not subsection_text:
+            continue
 
         chunk = deepcopy(source)
+
         chunk["chapter"] = None
         chunk["article"] = None
         chunk["paragraph"] = None
         chunk["article_no"] = None
         chunk["article_title"] = None
+
         chunk["section_type"] = "appendix"
-        chunk["chunk_type"] = "table" if TABLE_PATTERN.search(raw_content) else "appendix"
+        chunk["chunk_type"] = (
+            "table"
+            if TABLE_PATTERN.search(subsection_text)
+            else "appendix"
+        )
+
         chunk["appendix_no"] = appendix_no
         chunk["appendix_title"] = appendix_title
         chunk["subsection"] = _clean_text(match.group(1))
         chunk["related_article"] = related_article
-        chunk["content"] = raw_content
-        chunk["raw_content"] = raw_content
+
+        # 핵심:
+        # 첫 subsection 내용을 다른 subsection에 prefix로 반복하지 않는다.
+        chunk["content"] = subsection_text
+        chunk["raw_content"] = subsection_text
+
         chunk["page_content"] = _build_page_content(chunk)
+
         chunks.append(chunk)
 
     return chunks
 
 
-def split_chunk_on_appendices(source: dict[str, Any]) -> list[dict[str, Any]]:
-    content = source.get("content") or source.get("page_content") or ""
-    matches = list(APPENDIX_PATTERN.finditer(content))
-    if not matches:
-        return [_make_main_chunk(source, content)]
+def split_chunk_on_appendices(
+    source: dict[str, Any]
+) -> list[dict[str, Any]]:
+    content = (
+        source.get("content")
+        or source.get("page_content")
+        or ""
+    )
+
+    # 1. 먼저 부칙 / 별표 / 별지 시작 위치를 찾는다.
+    boundary_match = SECTION_BOUNDARY_PATTERN.search(content)
+
+    if boundary_match:
+        main_content = content[:boundary_match.start()].strip()
+        trailing_content = content[boundary_match.start():].strip()
+    else:
+        main_content = content.strip()
+        trailing_content = ""
 
     result: list[dict[str, Any]] = []
-    main_content = content[:matches[0].start()].strip()
-    if main_content:
-        result.append(_make_main_chunk(source, main_content))
 
-    for index, match in enumerate(matches):
-        start = match.start()
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
-        appendix_block = content[start:end].strip()
-        appendix_no = re.sub(r"\s+", " ", match.group(1)).strip()
-        result.extend(_make_appendix_chunks(source, appendix_block, appendix_no))
+    # 2. 조문 본문은 경계 이전까지만 main chunk로 만든다.
+    if main_content:
+        result.append(
+            _make_main_chunk(
+                source,
+                main_content,
+            )
+        )
+
+    # 3. 뒤쪽 내용에서 별표만 별도 처리한다.
+    if trailing_content:
+        appendix_matches = list(
+            APPENDIX_PATTERN.finditer(trailing_content)
+        )
+
+        for index, match in enumerate(appendix_matches):
+            start = match.start()
+
+            end = (
+                appendix_matches[index + 1].start()
+                if index + 1 < len(appendix_matches)
+                else len(trailing_content)
+            )
+
+            appendix_block = trailing_content[
+                start:end
+            ].strip()
+
+            appendix_no = re.sub(
+                r"\s+",
+                " ",
+                match.group(1),
+            ).strip()
+
+            result.extend(
+                _make_appendix_chunks(
+                    source,
+                    appendix_block,
+                    appendix_no,
+                )
+            )
 
     return result
 
