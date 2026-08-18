@@ -171,7 +171,7 @@ def extract_document_text(result: dict) -> tuple[str, int]:
 def build_chunks_from_parsed_json() -> None:
     CHUNK_DIR.mkdir(parents=True, exist_ok=True)
 
-    json_paths = sorted(PARSED_DIR.glob("*_파싱결과.json"))
+    json_paths = sorted(PARSED_DIR.glob("*.json"))
     if not json_paths:
         raise FileNotFoundError(
             f"파싱 결과 JSON이 없습니다: {PARSED_DIR.resolve()}"
@@ -231,9 +231,8 @@ def build_chunks_from_parsed_json() -> None:
 
 
 def main() -> None:
-    # 이미 LlamaParse 결과 JSON이 있다면 parse_all_pdfs()는 주석 처리하고
-    # build_chunks_from_parsed_json()만 실행해도 된다.
-    parse_all_pdfs()
+    # 이미 LlamaParse 결과 JSON이 있다면 재파싱하지 않는다.
+    # parse_all_pdfs()
     build_chunks_from_parsed_json()
 
 

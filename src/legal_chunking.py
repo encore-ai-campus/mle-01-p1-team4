@@ -1,38 +1,45 @@
 import re
+from copy import deepcopy
+from typing import Any
+
 from bs4 import BeautifulSoup
 
-CHAPTER_PATTERN = re.compile(
-    r"(?m)^[ \t]*#{0,6}[ \t]*(제\s*\d+\s*장(?:\s+[^\n]+)?)"
-)
-ARTICLE_PATTERN = re.compile(
-    r"(?m)^[ \t]*#{0,6}[ \t]*(제\s*\d+\s*조(?:의\s*\d+)?(?:\s*\([^)\n]+\))?)"
-)
-PARAGRAPH_PATTERN = re.compile(r"[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]")
-APPENDIX_PATTERN = re.compile(r"(?m)^[ \t]*\[(별표\s*\d+(?:의\s*\d+)?)\][ \t]*$")
-APPENDIX_SUBSECTION_PATTERN = re.compile(
-    r"(?m)^[ \t]*#{0,6}[ \t]*(\d+\.[ \t]*[^\n<]+)[ \t]*$"
+APPENDIX_PATTERN = re.compile(
+    r"(?m)^[ \t]*\[(별표\s*\d+(?:의\s*\d+)?)\][ \t]*$"
 )
 TABLE_PATTERN = re.compile(r"(?is)<table\b[^>]*>.*?</table>")
-RELATED_ARTICLE_PATTERN = re.compile(r"\((제\s*\d+\s*조(?:의\s*\d+)?)[ \t]*관련\)")
+RELATED_ARTICLE_PATTERN = re.compile(
+    r"\((제\s*\d+\s*조(?:의\s*\d+)?)\s*관련\)"
+)
+SUBSECTION_PATTERN = re.compile(
+    r"(?m)^[ \t]*#{1,6}[ \t]*(\d+\.[ \t]*[^\n<]+)[ \t]*$"
+)
+ARTICLE_PARTS_PATTERN = re.compile(
+    r"(제\s*\d+\s*조(?:의\s*\d+)?)\s*(?:\(([^)]+)\))?"
+)
 
 
-def _clean_inline_html(text: str) -> str:
+def _clean_text(text: str) -> str:
     soup = BeautifulSoup(text, "html.parser")
-    return " ".join(soup.get_text(" ", strip=True).split())
+    cleaned = soup.get_text("\n")
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"\n[ \t]+", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 def normalize_html_table(table_html: str) -> str:
     soup = BeautifulSoup(table_html, "html.parser")
     rows = soup.find_all("tr")
     if not rows:
-        return _clean_inline_html(table_html)
+        return _clean_text(table_html)
 
     first_cells = rows[0].find_all(["th", "td"])
     headers = [" ".join(cell.get_text(" ", strip=True).split()) for cell in first_cells]
     has_header = bool(rows[0].find_all("th"))
     data_rows = rows[1:] if has_header else rows
 
-    normalized_rows = []
+    normalized_rows: list[str] = []
     for row in data_rows:
         cells = [
             " ".join(cell.get_text(" ", strip=True).split())
@@ -55,231 +62,172 @@ def normalize_html_table(table_html: str) -> str:
 
 
 def normalize_content(raw_text: str) -> str:
-    def replace_table(match: re.Match) -> str:
-        normalized = normalize_html_table(match.group(0))
-        return f"\n\n{normalized}\n\n"
+    def replace_table(match: re.Match[str]) -> str:
+        return f"\n\n{normalize_html_table(match.group(0))}\n\n"
 
     text = TABLE_PATTERN.sub(replace_table, raw_text)
-    text = BeautifulSoup(text, "html.parser").get_text("\n")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n[ \t]+", "\n", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+    return _clean_text(text)
 
 
-def _article_parts(article_name: str):
-    match = re.match(
-        r"(제\s*\d+\s*조(?:의\s*\d+)?)\s*(?:\(([^)]+)\))?",
-        article_name,
-    )
+def parse_article(article: str | None) -> tuple[str | None, str | None]:
+    if not article:
+        return None, None
+
+    match = ARTICLE_PARTS_PATTERN.search(article)
     if not match:
-        return article_name, None
-    return match.group(1).replace(" ", ""), match.group(2)
+        return article.strip(), None
+
+    article_no = re.sub(r"\s+", "", match.group(1))
+    article_title = match.group(2).strip() if match.group(2) else None
+    return article_no, article_title
 
 
-def _contextualize(document_name, content, chapter=None, article=None,
-                   paragraph=None, appendix_no=None, appendix_title=None,
-                   subsection=None):
-    context = [f"문서: {document_name}"]
-    if chapter:
-        context.append(f"장: {_clean_inline_html(chapter)}")
-    if article:
-        context.append(f"조: {_clean_inline_html(article)}")
-    if paragraph:
-        context.append(f"항: {paragraph}")
-    if appendix_no:
-        context.append(f"별표: {appendix_no}")
-    if appendix_title:
-        context.append(f"별표 제목: {appendix_title}")
-    if subsection:
-        context.append(f"구분: {subsection}")
-    return "\n".join(context) + "\n\n" + normalize_content(content)
-
-
-def _split_articles(text: str, document_name: str):
-    chunks = []
-    chapter_matches = list(CHAPTER_PATTERN.finditer(text)) or [None]
-
-    for chapter_index, chapter_match in enumerate(chapter_matches):
-        if chapter_match:
-            chapter_name = chapter_match.group(1).strip()
-            chapter_start = chapter_match.start()
-            chapter_end = (
-                chapter_matches[chapter_index + 1].start()
-                if chapter_index + 1 < len(chapter_matches)
-                else len(text)
-            )
-            chapter_text = text[chapter_start:chapter_end]
-        else:
-            chapter_name = None
-            chapter_text = text
-
-        article_matches = list(ARTICLE_PATTERN.finditer(chapter_text))
-        for article_index, article_match in enumerate(article_matches):
-            article_name = article_match.group(1).strip()
-            article_no, article_title = _article_parts(article_name)
-            article_start = article_match.start()
-            article_end = (
-                article_matches[article_index + 1].start()
-                if article_index + 1 < len(article_matches)
-                else len(chapter_text)
-            )
-            article_text = chapter_text[article_start:article_end].strip()
-            if not article_text:
-                continue
-
-            paragraph_matches = list(PARAGRAPH_PATTERN.finditer(article_text))
-            if not paragraph_matches:
-                chunks.append({
-                    "document_name": document_name,
-                    "section_type": "main",
-                    "chunk_type": "article",
-                    "chapter": chapter_name,
-                    "article": article_name,
-                    "article_no": article_no,
-                    "article_title": article_title,
-                    "paragraph": None,
-                    "appendix_no": None,
-                    "appendix_title": None,
-                    "subsection": None,
-                    "related_article": None,
-                    "raw_content": article_text,
-                    "page_content": _contextualize(
-                        document_name, article_text,
-                        chapter=chapter_name, article=article_name,
-                    ),
-                })
-                continue
-
-            for paragraph_index, paragraph_match in enumerate(paragraph_matches):
-                paragraph_start = paragraph_match.start()
-                paragraph_end = (
-                    paragraph_matches[paragraph_index + 1].start()
-                    if paragraph_index + 1 < len(paragraph_matches)
-                    else len(article_text)
-                )
-                paragraph_text = article_text[paragraph_start:paragraph_end].strip()
-                if not paragraph_text:
-                    continue
-                paragraph_symbol = paragraph_match.group(0)
-                chunks.append({
-                    "document_name": document_name,
-                    "section_type": "main",
-                    "chunk_type": "paragraph",
-                    "chapter": chapter_name,
-                    "article": article_name,
-                    "article_no": article_no,
-                    "article_title": article_title,
-                    "paragraph": paragraph_symbol,
-                    "appendix_no": None,
-                    "appendix_title": None,
-                    "subsection": None,
-                    "related_article": None,
-                    "raw_content": paragraph_text,
-                    "page_content": _contextualize(
-                        document_name, paragraph_text,
-                        chapter=chapter_name, article=article_name,
-                        paragraph=paragraph_symbol,
-                    ),
-                })
-    return chunks
-
-
-def _extract_appendix_title(block_body: str):
-    for line in block_body.splitlines():
+def _extract_appendix_title(body: str) -> tuple[str | None, str | None]:
+    for line in body.splitlines():
         stripped = line.strip()
         if not stripped:
             continue
-        if stripped.startswith("<table"):
+        if stripped.lower().startswith("<table"):
             break
+
         heading = re.sub(r"^#{1,6}\s*", "", stripped)
-        heading = _clean_inline_html(heading)
-        if heading:
-            related = RELATED_ARTICLE_PATTERN.search(heading)
-            related_article = related.group(1).replace(" ", "") if related else None
-            title = RELATED_ARTICLE_PATTERN.sub("", heading).strip()
-            return title, related_article
+        heading = _clean_text(heading)
+        if not heading:
+            continue
+
+        related_match = RELATED_ARTICLE_PATTERN.search(heading)
+        related_article = None
+        if related_match:
+            related_article = re.sub(r"\s+", "", related_match.group(1))
+
+        title = RELATED_ARTICLE_PATTERN.sub("", heading).strip()
+        return title or None, related_article
+
     return None, None
 
 
-def _split_appendices(text: str, document_name: str):
-    chunks = []
-    matches = list(APPENDIX_PATTERN.finditer(text))
-    for index, match in enumerate(matches):
-        appendix_no = re.sub(r"\s+", " ", match.group(1)).strip()
+def _build_page_content(chunk: dict[str, Any]) -> str:
+    context: list[str] = []
+    if chunk.get("document_name"):
+        context.append(f"문서: {chunk['document_name']}")
+    if chunk.get("chapter"):
+        context.append(f"장: {_clean_text(str(chunk['chapter']))}")
+    if chunk.get("article"):
+        context.append(f"조: {_clean_text(str(chunk['article']))}")
+    if chunk.get("paragraph"):
+        context.append(f"항: {chunk['paragraph']}")
+    if chunk.get("appendix_no"):
+        context.append(f"별표: {chunk['appendix_no']}")
+    if chunk.get("appendix_title"):
+        context.append(f"별표 제목: {chunk['appendix_title']}")
+    if chunk.get("subsection"):
+        context.append(f"구분: {chunk['subsection']}")
+
+    normalized = normalize_content(chunk.get("raw_content") or chunk.get("content") or "")
+    if context:
+        return "\n".join(context) + "\n\n" + normalized
+    return normalized
+
+
+def _make_main_chunk(source: dict[str, Any], content: str) -> dict[str, Any]:
+    chunk = deepcopy(source)
+    chunk["content"] = content.strip()
+    chunk["raw_content"] = content.strip()
+    article_no, article_title = parse_article(chunk.get("article"))
+    chunk["article_no"] = article_no
+    chunk["article_title"] = article_title
+    chunk["section_type"] = "main"
+    chunk["chunk_type"] = "paragraph" if chunk.get("paragraph") else "article"
+    chunk["appendix_no"] = None
+    chunk["appendix_title"] = None
+    chunk["subsection"] = None
+    chunk["related_article"] = None
+    chunk["page_content"] = _build_page_content(chunk)
+    return chunk
+
+
+def _make_appendix_chunks(source: dict[str, Any], appendix_block: str, appendix_no: str) -> list[dict[str, Any]]:
+    body = appendix_block.splitlines()
+    body_text = "\n".join(body[1:]).strip() if body else ""
+    appendix_title, related_article = _extract_appendix_title(body_text)
+    subsection_matches = list(SUBSECTION_PATTERN.finditer(body_text))
+
+    chunks: list[dict[str, Any]] = []
+    if not subsection_matches:
+        chunk = deepcopy(source)
+        chunk["chapter"] = None
+        chunk["article"] = None
+        chunk["paragraph"] = None
+        chunk["article_no"] = None
+        chunk["article_title"] = None
+        chunk["section_type"] = "appendix"
+        chunk["chunk_type"] = "table" if TABLE_PATTERN.search(appendix_block) else "appendix"
+        chunk["appendix_no"] = appendix_no
+        chunk["appendix_title"] = appendix_title
+        chunk["subsection"] = None
+        chunk["related_article"] = related_article
+        chunk["content"] = appendix_block.strip()
+        chunk["raw_content"] = appendix_block.strip()
+        chunk["page_content"] = _build_page_content(chunk)
+        return [chunk]
+
+    prefix = body_text[:subsection_matches[0].start()].strip()
+    for index, match in enumerate(subsection_matches):
         start = match.start()
-        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        block = text[start:end].strip()
-        body = text[match.end():end].strip()
-        appendix_title, related_article = _extract_appendix_title(body)
+        end = subsection_matches[index + 1].start() if index + 1 < len(subsection_matches) else len(body_text)
+        subsection_text = body_text[start:end].strip()
+        raw_content = f"{prefix}\n\n{subsection_text}".strip() if prefix else subsection_text
 
-        subsection_matches = list(APPENDIX_SUBSECTION_PATTERN.finditer(body))
-        if not subsection_matches:
-            chunks.append({
-                "document_name": document_name,
-                "section_type": "appendix",
-                "chunk_type": "table" if TABLE_PATTERN.search(block) else "appendix",
-                "chapter": None,
-                "article": None,
-                "article_no": None,
-                "article_title": None,
-                "paragraph": None,
-                "appendix_no": appendix_no,
-                "appendix_title": appendix_title,
-                "subsection": None,
-                "related_article": related_article,
-                "raw_content": block,
-                "page_content": _contextualize(
-                    document_name, block,
-                    appendix_no=appendix_no,
-                    appendix_title=appendix_title,
-                ),
-            })
-            continue
+        chunk = deepcopy(source)
+        chunk["chapter"] = None
+        chunk["article"] = None
+        chunk["paragraph"] = None
+        chunk["article_no"] = None
+        chunk["article_title"] = None
+        chunk["section_type"] = "appendix"
+        chunk["chunk_type"] = "table" if TABLE_PATTERN.search(raw_content) else "appendix"
+        chunk["appendix_no"] = appendix_no
+        chunk["appendix_title"] = appendix_title
+        chunk["subsection"] = _clean_text(match.group(1))
+        chunk["related_article"] = related_article
+        chunk["content"] = raw_content
+        chunk["raw_content"] = raw_content
+        chunk["page_content"] = _build_page_content(chunk)
+        chunks.append(chunk)
 
-        prefix = body[:subsection_matches[0].start()].strip()
-        for subsection_index, subsection_match in enumerate(subsection_matches):
-            subsection = _clean_inline_html(subsection_match.group(1).strip())
-            subsection_start = subsection_match.start()
-            subsection_end = (
-                subsection_matches[subsection_index + 1].start()
-                if subsection_index + 1 < len(subsection_matches)
-                else len(body)
-            )
-            subsection_text = body[subsection_start:subsection_end].strip()
-            raw_content = (prefix + "\n\n" + subsection_text).strip() if prefix else subsection_text
-            chunks.append({
-                "document_name": document_name,
-                "section_type": "appendix",
-                "chunk_type": "table" if TABLE_PATTERN.search(raw_content) else "appendix",
-                "chapter": None,
-                "article": None,
-                "article_no": None,
-                "article_title": None,
-                "paragraph": None,
-                "appendix_no": appendix_no,
-                "appendix_title": appendix_title,
-                "subsection": subsection,
-                "related_article": related_article,
-                "raw_content": raw_content,
-                "page_content": _contextualize(
-                    document_name, raw_content,
-                    appendix_no=appendix_no,
-                    appendix_title=appendix_title,
-                    subsection=subsection,
-                ),
-            })
     return chunks
 
 
-def split_legal_document(document_text: str, document_name: str):
-    appendix_matches = list(APPENDIX_PATTERN.finditer(document_text))
-    main_text = (
-        document_text[:appendix_matches[0].start()]
-        if appendix_matches
-        else document_text
-    )
-    chunks = _split_articles(main_text, document_name)
-    if appendix_matches:
-        chunks.extend(_split_appendices(document_text[appendix_matches[0].start():], document_name))
-    return chunks
+def split_chunk_on_appendices(source: dict[str, Any]) -> list[dict[str, Any]]:
+    content = source.get("content") or source.get("page_content") or ""
+    matches = list(APPENDIX_PATTERN.finditer(content))
+    if not matches:
+        return [_make_main_chunk(source, content)]
+
+    result: list[dict[str, Any]] = []
+    main_content = content[:matches[0].start()].strip()
+    if main_content:
+        result.append(_make_main_chunk(source, main_content))
+
+    for index, match in enumerate(matches):
+        start = match.start()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        appendix_block = content[start:end].strip()
+        appendix_no = re.sub(r"\s+", " ", match.group(1)).strip()
+        result.extend(_make_appendix_chunks(source, appendix_block, appendix_no))
+
+    return result
+
+
+def postprocess_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    processed: list[dict[str, Any]] = []
+    counters: dict[str, int] = {}
+
+    for source in chunks:
+        for chunk in split_chunk_on_appendices(source):
+            document_name = chunk.get("document_name") or "document"
+            counters[document_name] = counters.get(document_name, 0) + 1
+            chunk["chunk_id"] = f"{document_name}_{counters[document_name]:04d}"
+            processed.append(chunk)
+
+    return processed
