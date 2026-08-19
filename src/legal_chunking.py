@@ -4,19 +4,27 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+
 APPENDIX_PATTERN = re.compile(
     r"(?m)^[ \t]*\[(별표\s*\d+(?:의\s*\d+)?)\][ \t]*$"
 )
-TABLE_PATTERN = re.compile(r"(?is)<table\b[^>]*>.*?</table>")
+
+TABLE_PATTERN = re.compile(
+    r"(?is)<table\b[^>]*>.*?</table>"
+)
+
 RELATED_ARTICLE_PATTERN = re.compile(
     r"\((제\s*\d+\s*조(?:의\s*\d+)?)\s*관련\)"
 )
+
 SUBSECTION_PATTERN = re.compile(
     r"(?m)^[ \t]*(?:#{1,6}[ \t]*)?(\d+\.[ \t]*[^\n<]+?)[ \t]*$"
 )
+
 ARTICLE_PARTS_PATTERN = re.compile(
     r"(제\s*\d+\s*조(?:의\s*\d+)?)\s*(?:\(([^)]+)\))?"
 )
+
 SECTION_BOUNDARY_PATTERN = re.compile(
     r"(?m)^[ \t]*(?:"
     r"#{0,6}[ \t]*부\s*칙"
@@ -25,10 +33,11 @@ SECTION_BOUNDARY_PATTERN = re.compile(
     r"|\[별지[^\]]*\]"
     r")"
 )
+
 APPENDIX_NOTE_PATTERN = re.compile(
     r"(?ms)^(.*?)(?:\n\s*비고\s*:\s*\n?)(.*)$"
-    
 )
+
 TRAILING_SECTION_PATTERN = re.compile(
     r"(?m)^[ \t]*(?:"
     r"\[별표[^\]]*\]"
@@ -36,6 +45,33 @@ TRAILING_SECTION_PATTERN = re.compile(
     r"|#{1,6}[ \t]*\d+\.[ \t]+"
     r")"
 )
+
+
+def _get_content(chunk: dict[str, Any]) -> str:
+    """chunk에서 사용할 원본 content를 가져온다."""
+    return (
+        chunk.get("raw_content")
+        or chunk.get("content")
+        or ""
+    )
+
+
+def _normalize_whitespace(text: str) -> str:
+    """비교를 위해 연속된 공백과 줄바꿈을 하나의 공백으로 정규화한다."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _clean_text(text: str) -> str:
+    """HTML 태그와 불필요한 공백을 제거한다."""
+    soup = BeautifulSoup(text, "html.parser")
+
+    cleaned = soup.get_text("\n")
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r"\n[ \t]+", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+
+    return cleaned.strip()
+
 
 def _split_appendix_core_and_note(
     raw_content: str,
@@ -70,19 +106,13 @@ def _appendix_core_key(
     별표 본문의 중복 판단용 key.
     비고 이후 내용은 제외하고 공통 별표 본문만 비교한다.
     """
-    raw_content = (
-        chunk.get("raw_content")
-        or chunk.get("content")
-        or ""
+    raw_content = _get_content(chunk)
+
+    core, _ = _split_appendix_core_and_note(
+        raw_content
     )
 
-    core, _ = _split_appendix_core_and_note(raw_content)
-
-    normalized_core = re.sub(
-        r"\s+",
-        " ",
-        core,
-    ).strip()
+    normalized_core = _normalize_whitespace(core)
 
     return (
         chunk.get("document_name"),
@@ -92,32 +122,40 @@ def _appendix_core_key(
         normalized_core,
     )
 
-def _clean_text(text: str) -> str:
-    soup = BeautifulSoup(text, "html.parser")
-    cleaned = soup.get_text("\n")
-    cleaned = re.sub(r"[ \t]+", " ", cleaned)
-    cleaned = re.sub(r"\n[ \t]+", "\n", cleaned)
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    return cleaned.strip()
-
 
 def normalize_html_table(table_html: str) -> str:
+    """HTML table을 검색하기 쉬운 텍스트 형태로 변환한다."""
     soup = BeautifulSoup(table_html, "html.parser")
     rows = soup.find_all("tr")
+
     if not rows:
         return _clean_text(table_html)
 
     first_cells = rows[0].find_all(["th", "td"])
-    headers = [" ".join(cell.get_text(" ", strip=True).split()) for cell in first_cells]
-    has_header = bool(rows[0].find_all("th"))
+
+    headers = [
+        " ".join(
+            cell.get_text(" ", strip=True).split()
+        )
+        for cell in first_cells
+    ]
+
+    has_header = bool(
+        rows[0].find_all("th")
+    )
+
     data_rows = rows[1:] if has_header else rows
 
     normalized_rows: list[str] = []
+
     for row in data_rows:
         cells = [
-            " ".join(cell.get_text(" ", strip=True).split())
+            " ".join(
+                cell.get_text(" ", strip=True).split()
+            )
             for cell in row.find_all(["th", "td"])
         ]
+
         if not cells:
             continue
 
@@ -127,78 +165,168 @@ def normalize_html_table(table_html: str) -> str:
                 for header, value in zip(headers, cells)
                 if header and value
             ]
-            normalized_rows.append("\n".join(lines))
-        else:
-            normalized_rows.append(" | ".join(value for value in cells if value))
 
-    return "\n\n".join(normalized_rows).strip()
+            normalized_rows.append(
+                "\n".join(lines)
+            )
+        else:
+            normalized_rows.append(
+                " | ".join(
+                    value for value in cells if value
+                )
+            )
+
+    return "\n\n".join(
+        normalized_rows
+    ).strip()
 
 
 def normalize_content(raw_text: str) -> str:
-    def replace_table(match: re.Match[str]) -> str:
-        return f"\n\n{normalize_html_table(match.group(0))}\n\n"
+    """본문의 HTML table을 변환하고 전체 텍스트를 정리한다."""
 
-    text = TABLE_PATTERN.sub(replace_table, raw_text)
+    def replace_table(
+        match: re.Match[str],
+    ) -> str:
+        return (
+            "\n\n"
+            + normalize_html_table(match.group(0))
+            + "\n\n"
+        )
+
+    text = TABLE_PATTERN.sub(
+        replace_table,
+        raw_text,
+    )
+
     return _clean_text(text)
 
 
-def parse_article(article: str | None) -> tuple[str | None, str | None]:
+def parse_article(
+    article: str | None,
+) -> tuple[str | None, str | None]:
+    """제N조 형태의 문자열에서 조 번호와 조 제목을 분리한다."""
     if not article:
         return None, None
 
     match = ARTICLE_PARTS_PATTERN.search(article)
+
     if not match:
         return article.strip(), None
 
-    article_no = re.sub(r"\s+", "", match.group(1))
-    article_title = match.group(2).strip() if match.group(2) else None
+    article_no = re.sub(
+        r"\s+",
+        "",
+        match.group(1),
+    )
+
+    article_title = (
+        match.group(2).strip()
+        if match.group(2)
+        else None
+    )
+
     return article_no, article_title
 
 
-def _extract_appendix_title(body: str) -> tuple[str | None, str | None]:
+def _extract_appendix_title(
+    body: str,
+) -> tuple[str | None, str | None]:
+    """별표 제목과 관련 조문을 추출한다."""
     for line in body.splitlines():
         stripped = line.strip()
+
         if not stripped:
             continue
+
         if stripped.lower().startswith("<table"):
             break
 
-        heading = re.sub(r"^#{1,6}\s*", "", stripped)
+        heading = re.sub(
+            r"^#{1,6}\s*",
+            "",
+            stripped,
+        )
+
         heading = _clean_text(heading)
+
         if not heading:
             continue
 
-        related_match = RELATED_ARTICLE_PATTERN.search(heading)
-        related_article = None
-        if related_match:
-            related_article = re.sub(r"\s+", "", related_match.group(1))
+        related_match = RELATED_ARTICLE_PATTERN.search(
+            heading
+        )
 
-        title = RELATED_ARTICLE_PATTERN.sub("", heading).strip()
+        related_article = None
+
+        if related_match:
+            related_article = re.sub(
+                r"\s+",
+                "",
+                related_match.group(1),
+            )
+
+        title = RELATED_ARTICLE_PATTERN.sub(
+            "",
+            heading,
+        ).strip()
+
         return title or None, related_article
 
     return None, None
 
 
-def _build_page_content(chunk: dict[str, Any]) -> str:
+def _build_page_content(
+    chunk: dict[str, Any],
+) -> str:
+    """metadata와 정규화된 본문을 결합해 RAG용 page_content를 만든다."""
     context: list[str] = []
-    if chunk.get("document_name"):
-        context.append(f"문서: {chunk['document_name']}")
-    if chunk.get("chapter"):
-        context.append(f"장: {_clean_text(str(chunk['chapter']))}")
-    if chunk.get("article"):
-        context.append(f"조: {_clean_text(str(chunk['article']))}")
-    if chunk.get("paragraph"):
-        context.append(f"항: {chunk['paragraph']}")
-    if chunk.get("appendix_no"):
-        context.append(f"별표: {chunk['appendix_no']}")
-    if chunk.get("appendix_title"):
-        context.append(f"별표 제목: {chunk['appendix_title']}")
-    if chunk.get("subsection"):
-        context.append(f"구분: {chunk['subsection']}")
 
-    normalized = normalize_content(chunk.get("raw_content") or chunk.get("content") or "")
+    if chunk.get("document_name"):
+        context.append(
+            f"문서: {chunk['document_name']}"
+        )
+
+    if chunk.get("chapter"):
+        context.append(
+            f"장: {_clean_text(str(chunk['chapter']))}"
+        )
+
+    if chunk.get("article"):
+        context.append(
+            f"조: {_clean_text(str(chunk['article']))}"
+        )
+
+    if chunk.get("paragraph"):
+        context.append(
+            f"항: {chunk['paragraph']}"
+        )
+
+    if chunk.get("appendix_no"):
+        context.append(
+            f"별표: {chunk['appendix_no']}"
+        )
+
+    if chunk.get("appendix_title"):
+        context.append(
+            f"별표 제목: {chunk['appendix_title']}"
+        )
+
+    if chunk.get("subsection"):
+        context.append(
+            f"구분: {chunk['subsection']}"
+        )
+
+    normalized = normalize_content(
+        _get_content(chunk)
+    )
+
     if context:
-        return "\n".join(context) + "\n\n" + normalized
+        return (
+            "\n".join(context)
+            + "\n\n"
+            + normalized
+        )
+
     return normalized
 
 
@@ -206,10 +334,13 @@ def _make_main_chunk(
     source: dict[str, Any],
     content: str,
 ) -> dict[str, Any]:
+    """일반 조문 chunk를 생성한다."""
     chunk = deepcopy(source)
 
-    chunk["content"] = content.strip()
-    chunk["raw_content"] = content.strip()
+    content = content.strip()
+
+    chunk["content"] = content
+    chunk["raw_content"] = content
 
     article_no, article_title = parse_article(
         chunk.get("article")
@@ -225,6 +356,7 @@ def _make_main_chunk(
         chunk["paragraph"] = None
 
     chunk["section_type"] = "main"
+
     chunk["chunk_type"] = (
         "paragraph"
         if chunk.get("paragraph")
@@ -248,11 +380,22 @@ def _make_appendix_chunks(
     appendix_block: str,
     appendix_no: str,
 ) -> list[dict[str, Any]]:
+    """별표를 하위 구분 단위의 chunk로 분리한다."""
     lines = appendix_block.splitlines()
-    body_text = "\n".join(lines[1:]).strip() if lines else ""
 
-    appendix_title, related_article = _extract_appendix_title(body_text)
-    subsection_matches = list(SUBSECTION_PATTERN.finditer(body_text))
+    body_text = (
+        "\n".join(lines[1:]).strip()
+        if lines
+        else ""
+    )
+
+    appendix_title, related_article = (
+        _extract_appendix_title(body_text)
+    )
+
+    subsection_matches = list(
+        SUBSECTION_PATTERN.finditer(body_text)
+    )
 
     chunks: list[dict[str, Any]] = []
 
@@ -267,6 +410,7 @@ def _make_appendix_chunks(
         chunk["article_title"] = None
 
         chunk["section_type"] = "appendix"
+
         chunk["chunk_type"] = (
             "table"
             if TABLE_PATTERN.search(appendix_block)
@@ -278,16 +422,28 @@ def _make_appendix_chunks(
         chunk["subsection"] = None
         chunk["related_article"] = related_article
 
-        chunk["content"] = appendix_block.strip()
-        chunk["raw_content"] = appendix_block.strip()
-        chunk["page_content"] = _build_page_content(chunk)
+        content = appendix_block.strip()
+
+        chunk["content"] = content
+        chunk["raw_content"] = content
+        chunk["page_content"] = _build_page_content(
+            chunk
+        )
 
         return [chunk]
 
     # 별표 제목 부분만 공통 정보로 보존
-    header_text = body_text[:subsection_matches[0].start()].strip()
+    header_text = body_text[
+        :subsection_matches[0].start()
+    ].strip()
 
-    for index, match in enumerate(subsection_matches):
+    # 현재 코드의 동작을 유지하기 위해
+    # header_text는 별도로 chunk에 붙이지 않는다.
+    _ = header_text
+
+    for index, match in enumerate(
+        subsection_matches
+    ):
         start = match.start()
 
         end = (
@@ -297,7 +453,9 @@ def _make_appendix_chunks(
         )
 
         # 현재 subsection만 포함
-        subsection_text = body_text[start:end].strip()
+        subsection_text = body_text[
+            start:end
+        ].strip()
 
         if not subsection_text:
             continue
@@ -311,6 +469,7 @@ def _make_appendix_chunks(
         chunk["article_title"] = None
 
         chunk["section_type"] = "appendix"
+
         chunk["chunk_type"] = (
             "table"
             if TABLE_PATTERN.search(subsection_text)
@@ -319,15 +478,19 @@ def _make_appendix_chunks(
 
         chunk["appendix_no"] = appendix_no
         chunk["appendix_title"] = appendix_title
-        chunk["subsection"] = _clean_text(match.group(1))
+        chunk["subsection"] = _clean_text(
+            match.group(1)
+        )
         chunk["related_article"] = related_article
 
-        # 핵심:
-        # 첫 subsection 내용을 다른 subsection에 prefix로 반복하지 않는다.
+        # 첫 subsection 내용을 다른 subsection에
+        # prefix로 반복하지 않는다.
         chunk["content"] = subsection_text
         chunk["raw_content"] = subsection_text
 
-        chunk["page_content"] = _build_page_content(chunk)
+        chunk["page_content"] = _build_page_content(
+            chunk
+        )
 
         chunks.append(chunk)
 
@@ -335,8 +498,9 @@ def _make_appendix_chunks(
 
 
 def split_chunk_on_appendices(
-    source: dict[str, Any]
+    source: dict[str, Any],
 ) -> list[dict[str, Any]]:
+    """본문과 부칙/별표/별지를 분리하고 별표 chunk를 생성한다."""
     content = (
         source.get("content")
         or source.get("page_content")
@@ -344,11 +508,18 @@ def split_chunk_on_appendices(
     )
 
     # 1. 먼저 부칙 / 별표 / 별지 시작 위치를 찾는다.
-    boundary_match = SECTION_BOUNDARY_PATTERN.search(content)
+    boundary_match = SECTION_BOUNDARY_PATTERN.search(
+        content
+    )
 
     if boundary_match:
-        main_content = content[:boundary_match.start()].strip()
-        trailing_content = content[boundary_match.start():].strip()
+        main_content = content[
+            :boundary_match.start()
+        ].strip()
+
+        trailing_content = content[
+            boundary_match.start():
+        ].strip()
     else:
         main_content = content.strip()
         trailing_content = ""
@@ -367,10 +538,14 @@ def split_chunk_on_appendices(
     # 3. 뒤쪽 내용에서 별표만 별도 처리한다.
     if trailing_content:
         appendix_matches = list(
-            APPENDIX_PATTERN.finditer(trailing_content)
+            APPENDIX_PATTERN.finditer(
+                trailing_content
+            )
         )
 
-        for index, match in enumerate(appendix_matches):
+        for index, match in enumerate(
+            appendix_matches
+        ):
             start = match.start()
 
             end = (
@@ -383,11 +558,9 @@ def split_chunk_on_appendices(
                 start:end
             ].strip()
 
-            appendix_no = re.sub(
-                r"\s+",
-                " ",
-                match.group(1),
-            ).strip()
+            appendix_no = _normalize_whitespace(
+                match.group(1)
+            )
 
             result.extend(
                 _make_appendix_chunks(
@@ -400,12 +573,30 @@ def split_chunk_on_appendices(
     return result
 
 
+def _dedup_key(
+    chunk: dict[str, Any],
+) -> tuple:
+    """일반 chunk의 중복 판단용 key를 생성한다."""
+    normalized_content = _normalize_whitespace(
+        _get_content(chunk)
+    )
+
+    return (
+        chunk.get("document_name"),
+        chunk.get("article_no"),
+        chunk.get("paragraph"),
+        normalized_content,
+    )
+
+
 def postprocess_chunks(
     chunks: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    split_result: list[dict[str, Any]] = []
+    """전체 chunk를 분리, 중복 제거하고 chunk_id를 부여한다."""
 
     # 1. 기존 별표/본문 분리
+    split_result: list[dict[str, Any]] = []
+
     for source in chunks:
         split_result.extend(
             split_chunk_on_appendices(source)
@@ -413,7 +604,7 @@ def postprocess_chunks(
 
     processed: list[dict[str, Any]] = []
 
-    # 일반 chunk exact dedup
+    # 일반 chunk dedup
     seen_general: set[tuple] = set()
 
     # 별표 본문 dedup
@@ -423,68 +614,53 @@ def postprocess_chunks(
     seen_appendix_notes: set[tuple] = set()
 
     for chunk in split_result:
+
+        # ---------------------------------
+        # 일반 chunk 처리
+        # ---------------------------------
         if chunk.get("section_type") != "appendix":
-            raw_content = (
-                chunk.get("raw_content")
-                or chunk.get("content")
-                or ""
-            )
-
-            normalized = re.sub(
-                r"\s+",
-                " ",
-                raw_content,
-            ).strip()
-
-            key = (
-                chunk.get("document_name"),
-                chunk.get("article_no"),
-                chunk.get("paragraph"),
-                normalized,
-            )
+            key = _dedup_key(chunk)
 
             if key in seen_general:
                 continue
 
             seen_general.add(key)
             processed.append(chunk)
+
             continue
 
-        # -----------------------------
+        # ---------------------------------
         # 별표 처리
-        # -----------------------------
-        raw_content = (
-            chunk.get("raw_content")
-            or chunk.get("content")
-            or ""
-        )
+        # ---------------------------------
+        raw_content = _get_content(chunk)
 
-        core, note = _split_appendix_core_and_note(
-            raw_content
+        core, note = (
+            _split_appendix_core_and_note(
+                raw_content
+            )
         )
 
         core_key = _appendix_core_key(chunk)
 
-        # 2. 동일 별표 본문은 최초 1번만 저장
+        # 동일 별표 본문은 최초 1번만 저장
         if core_key not in seen_appendix_core:
             core_chunk = deepcopy(chunk)
 
             core_chunk["content"] = core
             core_chunk["raw_content"] = core
-            core_chunk["page_content"] = _build_page_content(
-                core_chunk
+
+            core_chunk["page_content"] = (
+                _build_page_content(core_chunk)
             )
 
             seen_appendix_core.add(core_key)
             processed.append(core_chunk)
 
-        # 3. 비고 부분이 있으면 별도 chunk로 저장
+        # 비고 부분이 있으면 별도 chunk로 저장
         if note:
-            normalized_note = re.sub(
-                r"\s+",
-                " ",
-                note,
-            ).strip()
+            normalized_note = (
+                _normalize_whitespace(note)
+            )
 
             note_key = (
                 chunk.get("document_name"),
@@ -496,11 +672,15 @@ def postprocess_chunks(
             if note_key not in seen_appendix_notes:
                 note_chunk = deepcopy(chunk)
 
-                note_chunk["chunk_type"] = "appendix_note"
+                note_chunk["chunk_type"] = (
+                    "appendix_note"
+                )
+
                 note_chunk["subsection"] = "비고"
 
                 note_chunk["content"] = note
                 note_chunk["raw_content"] = note
+
                 note_chunk["page_content"] = (
                     _build_page_content(note_chunk)
                 )
@@ -527,27 +707,3 @@ def postprocess_chunks(
         )
 
     return processed
-
-def _dedup_key(chunk: dict[str, Any]) -> tuple:
-    raw_content = (
-        chunk.get("raw_content")
-        or chunk.get("content")
-        or ""
-    )
-
-    # 비교용으로만 공백/줄바꿈 정규화
-    normalized_content = re.sub(
-        r"\s+",
-        " ",
-        raw_content,
-    ).strip()
-
-    return (
-        chunk.get("document_name"),
-        chunk.get("section_type"),
-        chunk.get("article_no"),
-        chunk.get("paragraph"),
-        chunk.get("appendix_no"),
-        chunk.get("subsection"),
-        normalized_content,
-    )
