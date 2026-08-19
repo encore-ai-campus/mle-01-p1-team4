@@ -161,3 +161,34 @@ def test_appendix_subsections_are_split_independently():
 
     assert "직 급: 1 급" in first_chunk["page_content"]
     assert "직 급: 1 급" in second_chunk["page_content"]
+
+def test_postprocess_removes_exact_duplicate_appendices():
+    chunks = [
+        {
+            "document_name": "급여규정",
+            "content": (
+                "[별표 2]\n\n"
+                "직원 봉급액(제4조 관련)\n\n"
+                "<table>"
+                "<tr><th>호봉</th><th>3급</th></tr>"
+                "<tr><td>1</td><td>4,909,000</td></tr>"
+                "</table>"
+            ),
+        },
+        {
+            "document_name": "급여규정",
+            "content": (
+                "[별표 2]\n\n"
+                "직원 봉급액(제4조 관련)\n\n"
+                "<table>"
+                "<tr><th>호봉</th><th>3급</th></tr>"
+                "<tr><td>1</td><td>4,909,000</td></tr>"
+                "</table>"
+            ),
+        },
+    ]
+
+    result = postprocess_chunks(chunks)
+
+    assert len(result) == 1
+    assert result[0]["appendix_no"] == "별표 2"
