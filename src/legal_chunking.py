@@ -25,6 +25,72 @@ SECTION_BOUNDARY_PATTERN = re.compile(
     r"|\[별지[^\]]*\]"
     r")"
 )
+APPENDIX_NOTE_PATTERN = re.compile(
+    r"(?ms)^(.*?)(?:\n\s*비고\s*:\s*\n?)(.*)$"
+    
+)
+TRAILING_SECTION_PATTERN = re.compile(
+    r"(?m)^[ \t]*(?:"
+    r"\[별표[^\]]*\]"
+    r"|\[별지[^\]]*\]"
+    r"|#{1,6}[ \t]*\d+\.[ \t]+"
+    r")"
+)
+
+def _split_appendix_core_and_note(
+    raw_content: str,
+) -> tuple[str, str | None]:
+    text = raw_content.strip()
+
+    # 다른 별표 / 별지 / 새로운 번호 제목 시작 시
+    # 현재 별표 범위를 종료한다.
+    trailing_match = TRAILING_SECTION_PATTERN.search(
+        text,
+        1,
+    )
+
+    if trailing_match:
+        text = text[:trailing_match.start()].strip()
+
+    match = APPENDIX_NOTE_PATTERN.match(text)
+
+    if not match:
+        return text, None
+
+    core = match.group(1).strip()
+    note = match.group(2).strip()
+
+    return core, note or None
+
+
+def _appendix_core_key(
+    chunk: dict[str, Any],
+) -> tuple:
+    """
+    별표 본문의 중복 판단용 key.
+    비고 이후 내용은 제외하고 공통 별표 본문만 비교한다.
+    """
+    raw_content = (
+        chunk.get("raw_content")
+        or chunk.get("content")
+        or ""
+    )
+
+    core, _ = _split_appendix_core_and_note(raw_content)
+
+    normalized_core = re.sub(
+        r"\s+",
+        " ",
+        core,
+    ).strip()
+
+    return (
+        chunk.get("document_name"),
+        chunk.get("appendix_no"),
+        chunk.get("appendix_title"),
+        chunk.get("subsection"),
+        normalized_core,
+    )
 
 def _clean_text(text: str) -> str:
     soup = BeautifulSoup(text, "html.parser")
@@ -334,15 +400,154 @@ def split_chunk_on_appendices(
     return result
 
 
-def postprocess_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def postprocess_chunks(
+    chunks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    split_result: list[dict[str, Any]] = []
+
+    # 1. 기존 별표/본문 분리
+    for source in chunks:
+        split_result.extend(
+            split_chunk_on_appendices(source)
+        )
+
     processed: list[dict[str, Any]] = []
+
+    # 일반 chunk exact dedup
+    seen_general: set[tuple] = set()
+
+    # 별표 본문 dedup
+    seen_appendix_core: set[tuple] = set()
+
+    # 별표 note dedup
+    seen_appendix_notes: set[tuple] = set()
+
+    for chunk in split_result:
+        if chunk.get("section_type") != "appendix":
+            raw_content = (
+                chunk.get("raw_content")
+                or chunk.get("content")
+                or ""
+            )
+
+            normalized = re.sub(
+                r"\s+",
+                " ",
+                raw_content,
+            ).strip()
+
+            key = (
+                chunk.get("document_name"),
+                chunk.get("article_no"),
+                chunk.get("paragraph"),
+                normalized,
+            )
+
+            if key in seen_general:
+                continue
+
+            seen_general.add(key)
+            processed.append(chunk)
+            continue
+
+        # -----------------------------
+        # 별표 처리
+        # -----------------------------
+        raw_content = (
+            chunk.get("raw_content")
+            or chunk.get("content")
+            or ""
+        )
+
+        core, note = _split_appendix_core_and_note(
+            raw_content
+        )
+
+        core_key = _appendix_core_key(chunk)
+
+        # 2. 동일 별표 본문은 최초 1번만 저장
+        if core_key not in seen_appendix_core:
+            core_chunk = deepcopy(chunk)
+
+            core_chunk["content"] = core
+            core_chunk["raw_content"] = core
+            core_chunk["page_content"] = _build_page_content(
+                core_chunk
+            )
+
+            seen_appendix_core.add(core_key)
+            processed.append(core_chunk)
+
+        # 3. 비고 부분이 있으면 별도 chunk로 저장
+        if note:
+            normalized_note = re.sub(
+                r"\s+",
+                " ",
+                note,
+            ).strip()
+
+            note_key = (
+                chunk.get("document_name"),
+                chunk.get("appendix_no"),
+                chunk.get("appendix_title"),
+                normalized_note,
+            )
+
+            if note_key not in seen_appendix_notes:
+                note_chunk = deepcopy(chunk)
+
+                note_chunk["chunk_type"] = "appendix_note"
+                note_chunk["subsection"] = "비고"
+
+                note_chunk["content"] = note
+                note_chunk["raw_content"] = note
+                note_chunk["page_content"] = (
+                    _build_page_content(note_chunk)
+                )
+
+                seen_appendix_notes.add(note_key)
+                processed.append(note_chunk)
+
+    # 4. 최종 chunk_id 재부여
     counters: dict[str, int] = {}
 
-    for source in chunks:
-        for chunk in split_chunk_on_appendices(source):
-            document_name = chunk.get("document_name") or "document"
-            counters[document_name] = counters.get(document_name, 0) + 1
-            chunk["chunk_id"] = f"{document_name}_{counters[document_name]:04d}"
-            processed.append(chunk)
+    for chunk in processed:
+        document_name = (
+            chunk.get("document_name")
+            or "document"
+        )
+
+        counters[document_name] = (
+            counters.get(document_name, 0) + 1
+        )
+
+        chunk["chunk_id"] = (
+            f"{document_name}_"
+            f"{counters[document_name]:04d}"
+        )
 
     return processed
+
+def _dedup_key(chunk: dict[str, Any]) -> tuple:
+    raw_content = (
+        chunk.get("raw_content")
+        or chunk.get("content")
+        or ""
+    )
+
+    # 비교용으로만 공백/줄바꿈 정규화
+    normalized_content = re.sub(
+        r"\s+",
+        " ",
+        raw_content,
+    ).strip()
+
+    return (
+        chunk.get("document_name"),
+        chunk.get("section_type"),
+        chunk.get("article_no"),
+        chunk.get("paragraph"),
+        chunk.get("appendix_no"),
+        chunk.get("subsection"),
+        normalized_content,
+    )
