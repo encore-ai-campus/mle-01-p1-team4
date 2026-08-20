@@ -1,5 +1,10 @@
 from langchain_core.documents import Document
 
+company_retriever = company_store.as_retriever(search_kwargs={"k": 3})
+
+# 질문으로 관련 문서 검색
+results = company_retriever.invoke(question)
+
 
 def with_chunk_neighbors(hit, window=1):
     m = hit.metadata
