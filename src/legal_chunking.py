@@ -42,7 +42,6 @@ TRAILING_SECTION_PATTERN = re.compile(
     r"(?m)^[ \t]*(?:"
     r"\[별표[^\]]*\]"
     r"|\[별지[^\]]*\]"
-    r"|#{1,6}[ \t]*\d+\.[ \t]+"
     r")"
 )
 
@@ -57,7 +56,7 @@ def _get_content(chunk: dict[str, Any]) -> str:
 
 
 def _normalize_whitespace(text: str) -> str:
-    """비교를 위해 연속된 공백과 줄바꿈을 하나의 공백으로 정규화한다."""
+    """연속된 공백과 줄바꿈을 하나의 공백으로 정규화한다."""
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -88,6 +87,7 @@ def _split_appendix_core_and_note(
     if trailing_match:
         text = text[:trailing_match.start()].strip()
 
+    # 비고: 이후 내용은 별도 chunk로 분리한다.
     match = APPENDIX_NOTE_PATTERN.match(text)
 
     if not match:
@@ -392,9 +392,16 @@ def _make_appendix_chunks(
     appendix_title, related_article = (
         _extract_appendix_title(body_text)
     )
+    # subsection 탐색 시 비고 영역은 제외한다.
+    note_match = APPENDIX_NOTE_PATTERN.match(body_text)
+
+    if note_match:
+        subsection_body = note_match.group(1)
+    else:
+        subsection_body = body_text
 
     subsection_matches = list(
-        SUBSECTION_PATTERN.finditer(body_text)
+        SUBSECTION_PATTERN.finditer(subsection_body)
     )
 
     chunks: list[dict[str, Any]] = []
@@ -433,29 +440,34 @@ def _make_appendix_chunks(
         return [chunk]
 
     # 별표 제목 부분만 공통 정보로 보존
-    header_text = body_text[
+    header_text = subsection_body[
         :subsection_matches[0].start()
     ].strip()
 
-    # 현재 코드의 동작을 유지하기 위해
-    # header_text는 별도로 chunk에 붙이지 않는다.
-    _ = header_text
 
     for index, match in enumerate(
-        subsection_matches
+    subsection_matches
     ):
         start = match.start()
 
         end = (
             subsection_matches[index + 1].start()
             if index + 1 < len(subsection_matches)
-            else len(body_text)
+            else len(subsection_body)
         )
 
-        # 현재 subsection만 포함
-        subsection_text = body_text[
+        subsection_text = subsection_body[
             start:end
         ].strip()
+
+        # 첫 subsection 앞에 있던 공통 내용은
+        # 첫 번째 chunk에 포함시켜 유실을 방지한다.
+        if index == 0 and header_text:
+            subsection_text = (
+                header_text
+                + "\n\n"
+                + subsection_text
+            )
 
         if not subsection_text:
             continue
@@ -700,6 +712,7 @@ def postprocess_chunks(
         counters[document_name] = (
             counters.get(document_name, 0) + 1
         )
+        chunk["chunk_no"] = counters[document_name]
 
         chunk["chunk_id"] = (
             f"{document_name}_"
