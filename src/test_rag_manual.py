@@ -1,16 +1,25 @@
+import pandas as pd
+
 from retriever import retrieve_context
 from rag_chain import create_rag_chain
 from source import build_sources
 
 
+EVALSET_PATH = "evaluation/golden_set10.csv"
+
+evalset = pd.read_csv(
+    EVALSET_PATH,
+    encoding="utf-8",
+)
+
+# 여기서 먼저 CSV 구조 확인
+print("컬럼명:", evalset.columns.tolist())
+print(evalset.head())
+
+# 그 다음 query 컬럼 사용
+questions = evalset["query"].tolist()
+
 rag_chain = create_rag_chain()
-
-
-questions = [
-    "휴직 중에도 직무급을 받을 수 있나요?",
-    "점심시간은 몇 시부터 몇 시까지인가요?",
-]
-
 
 for question in questions:
 
