@@ -1,16 +1,37 @@
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
-company_retriever = company_store.as_retriever(search_kwargs={"k": 3})
+from ingest import (
+    CHROMA_PATH,
+    COLLECTION_NAME,
+    get_embeddings,
+)
 
-# 질문으로 관련 문서 검색
-results = company_retriever.invoke(question)
+def load_vector_store():
+    embeddings = get_embeddings()
+
+    store = Chroma(
+        collection_name=COLLECTION_NAME,
+        embedding_function=embeddings,
+        persist_directory=CHROMA_PATH,
+    )
+
+    return store
+
+def get_retriever(
+    store: Chroma,
+    k: int = 3,
+):
+    return store.as_retriever(
+        search_kwargs={"k": k}
+    )
 
 
-def with_chunk_neighbors(hit, window=1):
+def with_chunk_neighbors(hit:Document, store: Chroma, window: int = 1) -> list[Document]:
     m = hit.metadata
     want = [n for n in range(m["chunk_no"] - window,m["chunk_no"] + window + 1)if n >= 0]
 
-    got = company_store.get(
+    got = store.get(
         where={"$and": [{"document_name": {"$eq": m["document_name"]}},
                 {"chunk_no": {"$in": want}}]})
 
@@ -40,6 +61,32 @@ def build_context(results):
     # 7. 모든 Document를 하나의 문자열로 결합 
     return "\n\n".join(context_parts)
 
-neighbor_results = with_chunk_neighbors(results[0])
-context = build_context(neighbor_results)
-print(context)
+def retrieve_context(
+    question: str,
+    k: int = 3,
+    window: int = 1,
+):
+
+    store = load_vector_store()
+
+    retriever = get_retriever(
+        store=store,
+        k=k,
+    )
+
+    results = retriever.invoke(question)
+
+    if not results:
+        return [], [], ""
+
+    neighbor_results = with_chunk_neighbors(
+        store=store,
+        hit=results[0],
+        window=window,
+    )
+
+    context = build_context(
+        neighbor_results
+    )
+
+    return results, neighbor_results, context
