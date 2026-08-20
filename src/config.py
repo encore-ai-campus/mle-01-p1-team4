@@ -1,6 +1,8 @@
 from pathlib import Path
+from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / ".env")
 
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 LLAMA_PARSED_DIR = PROCESSED_DIR / "llama_parsed"
