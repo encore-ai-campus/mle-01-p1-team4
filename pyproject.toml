@@ -8,13 +8,16 @@ dependencies = [
     "beautifulsoup4>=4.15.0",
     "chromadb",
     "langchain",
+    "langchain-chroma>=1.1.0",
     "langchain-community",
+    "langchain-huggingface>=1.2.2",
     "langchain-openai",
     "langchain-text-splitters",
     "langchain-upstage>=0.7.7",
     "pypdf",
     "python-dotenv",
     "requests>=2.34.2",
+    "sentence-transformers>=5.7.0",
     "streamlit",
 ]
 
