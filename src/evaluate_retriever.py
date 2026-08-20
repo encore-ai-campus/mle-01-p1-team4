@@ -1,11 +1,17 @@
 import pandas as pd
 import pandas as pd
+from pathlib import Path
 
 from retriever import (
     load_vector_store,
     get_retriever,
 )
 
+RESULT_DIR = Path("evaluation/results")
+RESULT_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
 
 EVALSET_PATH = "evaluation/golden_set.csv"
 
@@ -165,4 +171,29 @@ print(
     compare.to_string(
         index=False
     )
+)
+
+RESULT_DIR = "evaluation/results"
+
+detail.to_csv(
+    f"{RESULT_DIR}/retriever_k3_detail.csv",
+    index=False,
+    encoding="utf-8-sig",
+)
+
+scores_k10_detail = scores_k10.merge(
+    evalset[["query_id", "query"]],
+    on="query_id",
+)
+
+scores_k10_detail.to_csv(
+    f"{RESULT_DIR}/retriever_k10_detail.csv",
+    index=False,
+    encoding="utf-8-sig",
+)
+
+compare.to_csv(
+    f"{RESULT_DIR}/retriever_k_compare.csv",
+    index=False,
+    encoding="utf-8-sig",
 )
