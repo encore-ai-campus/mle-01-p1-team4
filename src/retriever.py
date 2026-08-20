@@ -79,14 +79,28 @@ def retrieve_context(
     if not results:
         return [], [], ""
 
-    neighbor_results = with_chunk_neighbors(
-        store=store,
-        hit=results[0],
-        window=window,
-    )
+    context_docs = []
+    seen_chunk_ids = set()
+
+    for hit in results:
+
+        neighbors = with_chunk_neighbors(
+            store=store,
+            hit=hit,
+            window=window,
+        )
+
+        for doc in neighbors:
+            chunk_id = doc.metadata.get("chunk_id")
+
+            if chunk_id in seen_chunk_ids:
+                continue
+
+            seen_chunk_ids.add(chunk_id)
+            context_docs.append(doc)
 
     context = build_context(
-        neighbor_results
+        context_docs
     )
 
-    return results, neighbor_results, context
+    return results, context_docs, context
