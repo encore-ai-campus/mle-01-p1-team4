@@ -31,6 +31,16 @@ from analysis import (
     build_embedding_analysis_from_embeddings,
     get_cluster_summary,
     load_experiment_summary,
+    add_cluster_topics,
+)
+
+from chat_ui import (
+    inject_chatbot_css,
+    render_chat_welcome,
+    render_example_questions,
+    render_user_message,
+    render_randy_message,
+    render_randy_error,
 )
 
 
@@ -157,6 +167,7 @@ st.markdown("""
 html, body, [class*="css"] { font-family:'Noto Sans KR', sans-serif; }
 .stApp { background:#f6f8f7; color:var(--dark); }
 [data-testid="stSidebar"] { background:#f8fbfa; border-right:1px solid #e4ece9; }
+[data-testid="stSidebar"] { min-width:16vw; max-width:16vw; }
 [data-testid="stSidebar"] section { padding:2rem 1rem; }
 .brand { text-align:center; padding:.3rem 0 1.8rem; }
 .brand-mark { color:var(--green); font-size:3.5rem; font-weight:800; letter-spacing:-.12em; line-height:1; }
@@ -167,6 +178,8 @@ html, body, [class*="css"] { font-family:'Noto Sans KR', sans-serif; }
 .hero h1 span { color:var(--green); }
 .hero p { color:#6b7774; margin:0; }
 .hero-mascot { position:absolute; right:2%; bottom:-10px; width:225px; max-height:205px; object-fit:contain; }
+.speech { position:absolute; right:18%; top:1rem; z-index:1; padding:.75rem 1.1rem; border:2px solid var(--green); border-radius:20px; background:#fff; color:#111; font-weight:700; text-align:center; line-height:1.35; box-shadow:0 3px 8px rgba(17,48,39,.04); }
+.speech:after { content:""; position:absolute; right:18px; bottom:-12px; width:18px; height:18px; background:#fff; border-right:2px solid var(--green); border-bottom:2px solid var(--green); transform:rotate(35deg); }
 .search-wrap { background:white; border:1px solid #d8e1dd; border-radius:14px; padding:.25rem; box-shadow:0 4px 18px rgba(17,48,39,.06); }
 .section-title { font-size:1.25rem; font-weight:800; letter-spacing:-.04em; margin:.25rem 0 .85rem; }
 .section-title span { color:var(--green); }
@@ -182,6 +195,7 @@ html, body, [class*="css"] { font-family:'Noto Sans KR', sans-serif; }
 .recent-row { padding:.55rem 0; border-bottom:1px solid #edf1ef; font-size:.9rem; }
 .recent-row:last-child { border-bottom:0; }
 @media (max-width: 900px) { .hero-mascot { opacity:.35; right:-35px; } .hero h1 { font-size:1.65rem; } }
+@media (max-width: 900px) { [data-testid="stSidebar"] { min-width:0; max-width:none; } .speech { right:25%; transform:scale(.82); transform-origin:top right; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -205,15 +219,15 @@ if page == "🏠 홈":
     mascot_src = ""
     if mascot_path.exists():
         mascot_src = "data:image/png;base64," + base64.b64encode(mascot_path.read_bytes()).decode("ascii")
-    st.markdown(f'<div class="hero"><h1>안녕하세요! 오늘도 <span>규정 검색</span>을 도와드릴게요.</h1><p>필요한 규정 원문을 빠르고 정확하게 찾아보세요.</p><img class="hero-mascot" src="{mascot_src}"></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="hero"><h1>안녕하세요! 오늘도 <span>규정 검색</span>을 도와드릴게요.</h1><p>궁금한 규정이나 업무를 빠르게 찾아보세요.</p><div class="speech">궁금한 규정이나<br>업무를 검색해보세요!</div><img class="hero-mascot" src="{mascot_src}"></div>', unsafe_allow_html=True)
     search_col, button_col = st.columns([5, 1], vertical_alignment="bottom")
     with search_col:
-        search_query = st.text_input("규정 검색", placeholder="규정이나 업무를 검색해보세요", label_visibility="collapsed")
+        search_query = st.text_input("규정 검색", placeholder="규정이나 업무를 검색하세요", label_visibility="collapsed")
     with button_col:
         search_clicked = st.button("검색", use_container_width=True, type="primary")
     if search_clicked and search_query.strip():
         move_to_chatbot(search_query.strip())
-    popular_keyword = st.pills("인기 검색어", ["연차", "출장비", "초과근무수당", "승진", "휴직"], label_visibility="collapsed")
+    popular_keyword = st.pills("빠른 검색", ["연차", "출장비", "초과근무수당", "승진", "휴직"], label_visibility="collapsed")
     if popular_keyword:
         move_to_chatbot(f"{popular_keyword} 관련 규정을 알려줘")
 
@@ -223,7 +237,7 @@ if page == "🏠 홈":
     except Exception:
         tasks = []
     if tasks:
-        task_cols = st.columns(4)
+        task_cols = st.columns(4, gap="small")
         for index, task in enumerate(tasks):
             with task_cols[index % 4]:
                 st.markdown(f'<div class="card pdf-card"><div class="pdf-icon">{task["icon"]}</div><div class="pdf-name">{task["label"]}</div></div>', unsafe_allow_html=True)
@@ -232,136 +246,51 @@ if page == "🏠 홈":
                     st.download_button("PDF 원문 다운로드", data=pdf_path.read_bytes(), file_name=pdf_path.name, mime="application/pdf", key=f"pdf_{index}", use_container_width=True)
 
 
-    # =====================================================
-    # 추천 질문 / 담당 부서
-    # =====================================================
+    upper_left, upper_right = st.columns(2, gap="medium")
+    lower_left, lower_right = st.columns(2, gap="medium")
 
-    left_col, right_col = st.columns(2)
-
-
-    # =====================================================
-    # 추천 질문
-    # =====================================================
-
-    with left_col:
+    with upper_left:
         with st.container(border=True):
-
-            st.subheader(
-                "💡 추천 질문"
-            )
-
+            st.markdown("### 💡 추천 질문")
+            st.caption("자주 확인하는 규정을 빠르게 찾아보세요.")
             try:
-
-                questions = (
-                    get_recommended_questions()
-                )
-
-            except Exception as e:
-
-                st.error(
-                    "추천 질문을 불러오지 못했습니다."
-                )
-
-                st.exception(e)
-
+                questions = get_recommended_questions()
+            except Exception:
                 questions = []
+            for index, question in enumerate(questions[:5]):
+                q_col, b_col = st.columns([1, 12], vertical_alignment="center")
+                with q_col:
+                    st.markdown(f'<div class="rank">{index + 1}</div>', unsafe_allow_html=True)
+                with b_col:
+                    if st.button(question, key=f"recommended_{index}", use_container_width=True):
+                        move_to_chatbot(question)
 
-
-            for index, question in enumerate(
-                questions
-            ):
-
-                if st.button(
-                    question,
-                    key=f"recommended_{index}",
-                    use_container_width=True,
-                ):
-
-                    move_to_chatbot(
-                        question
-                    )
-
-
-    # =====================================================
-    # 담당 부서
-    # =====================================================
-
-    with right_col:
-
-        with st.container(
-            border=True
-        ):
-
-            st.subheader(
-                "☎️ 담당 부서 안내"
-            )
-
+    with upper_right:
+        with st.container(border=True):
+            st.markdown("### ☎ 담당 부서 안내")
+            st.caption("규정만으로 해결되지 않는 경우, 담당 부서에 문의해 주세요.")
             try:
+                departments = pd.DataFrame(get_department_info())
+                st.dataframe(departments, hide_index=True, use_container_width=True)
+            except Exception:
+                st.info("담당 부서 정보가 없습니다.")
 
-                departments = (
-                    get_department_info()
-                )
+    with lower_left:
+        with st.container(border=True):
+            st.markdown("### 🕘 나의 최근 질문")
+            user_messages = [message["content"] for message in st.session_state.messages if message["role"] == "user"]
+            if user_messages:
+                for index, recent_question in enumerate(user_messages[-5:][::-1]):
+                    if st.button(f"•  {recent_question}", key=f"recent_{index}", use_container_width=True):
+                        move_to_chatbot(recent_question)
+            else:
+                st.info("아직 질문 기록이 없습니다.")
 
-                department_df = (
-                    pd.DataFrame(
-                        departments
-                    )
-                )
-
-                st.dataframe(
-                    department_df,
-                    hide_index=True,
-                    use_container_width=True,
-                )
-
-            except Exception as e:
-
-                st.error(
-                    "담당 부서 정보를 불러오지 못했습니다."
-                )
-
-                st.exception(e)
-
-
-    # =====================================================
-    # 최근 질문
-    # =====================================================
-
-    st.subheader(
-        "🕒 나의 최근 질문"
-    )
-
-    user_messages = [
-        message["content"]
-        for message
-        in st.session_state.messages
-        if message["role"] == "user"
-    ]
-
-    if user_messages:
-
-        recent_questions = (
-            user_messages[-5:][::-1]
-        )
-
-        for index, recent_question in enumerate(
-            recent_questions
-        ):
-
-            if st.button(
-                recent_question,
-                key=f"recent_{index}",
-            ):
-
-                move_to_chatbot(
-                    recent_question
-                )
-
-    else:
-
-        st.info(
-            "아직 질문 기록이 없습니다."
-        )
+    with lower_right:
+        with st.container(border=True):
+            st.markdown("### 📚 규정 이용 안내")
+            st.caption("왼쪽의 원문 카드에서 실제 PDF 규정을 바로 다운로드할 수 있습니다.")
+            st.markdown("검색 결과가 필요하면 상단 검색창을 이용해 주세요.")
 
 
 # =========================================================
@@ -370,194 +299,56 @@ if page == "🏠 홈":
 # =========================================================
 
 elif page == "💬 규정 챗봇":
-
-    st.title(
-        "💬 사내 규정 AI 챗봇"
-    )
-
-    st.caption(
-        "사내 규정을 기반으로 답변합니다."
-    )
-
-
-    # =====================================================
-    # RAG 초기화
-    # =====================================================
-
+    inject_chatbot_css()
     try:
-
-        (
-            vector_store,
-            retriever,
-            chain,
-        ) = get_cached_rag()
-
+        vector_store, retriever, chain = get_cached_rag()
     except Exception as e:
-
-        st.error(
-            "RAG 시스템을 초기화하지 못했습니다."
-        )
-
-        st.exception(e)
-
+        render_randy_error("랜디가 규정 검색을 준비하지 못했어요.\n\n잠시 후 다시 시도해 주세요.", e)
         st.stop()
 
-
-    # =====================================================
-    # 이전 대화 출력
-    # =====================================================
+    if not st.session_state.messages:
+        render_chat_welcome()
+        render_example_questions()
 
     for message in st.session_state.messages:
+        if message["role"] == "assistant":
+            render_randy_message(message["content"], message.get("sources"))
+        else:
+            render_user_message(message["content"])
 
-        with st.chat_message(
-            message["role"]
-        ):
-
-            st.markdown(
-                message["content"]
-            )
-
-            if (
-                message["role"] == "assistant"
-                and message.get("sources")
-            ):
-
-                with st.expander(
-                    "📚 참고한 규정"
-                ):
-
-                    for source in message[
-                        "sources"
-                    ]:
-
-                        st.write(
-                            source
-                        )
-
-
-    # =====================================================
-    # 질문 입력
-    # =====================================================
-
-    typed_question = st.chat_input(
-        "사내 규정에 대해 질문하세요."
-    )
-
-
-    # 홈에서 넘어온 질문
-    pending_question = (
-        st.session_state.pending_question
-    )
-
-
+    typed_question = st.chat_input("예: 시간단위 연차 사용 기준은 어떻게 되나요?", key="chatbot_question_input")
+    pending_question = st.session_state.pending_question
     if pending_question:
-
         question = pending_question
-
         st.session_state.pending_question = None
-
     else:
-
         question = typed_question
 
-
-    # =====================================================
-    # 질문 처리
-    # =====================================================
-
     if question:
-
-        previous_messages = (
-            st.session_state.messages.copy()
-        )
-
-
-        # =================================================
-        # 사용자 메시지 저장
-        # =================================================
-
+        previous_messages = st.session_state.messages.copy()
         st.session_state.messages.append(
-            {
-                "role": "user",
-                "content": question,
-            }
+            {"role": "user", "content": question}
         )
-
-
-        with st.chat_message(
-            "user"
-        ):
-
-            st.markdown(
-                question
-            )
-
-
-        # =================================================
-        # RAG 답변
-        # =================================================
-
-        with st.chat_message(
-            "assistant"
-        ):
-
-            with st.spinner(
-                "관련 규정을 확인하고 있습니다..."
-            ):
-
-                try:
-
-                    result = generate_answer(
-                        question=question,
-                        messages=previous_messages,
-                        vector_store=vector_store,
-                        retriever=retriever,
-                        chain=chain,
-                    )
-
-                    answer = result.get(
-                        "answer",
-                        "답변을 생성하지 못했습니다.",
-                    )
-
-                    sources = result.get(
-                        "sources",
-                        [],
-                    )
-
-                    st.markdown(
-                        answer
-                    )
-
-                    if sources:
-
-                        with st.expander(
-                            "📚 참고한 규정"
-                        ):
-
-                            for source in sources:
-
-                                st.write(
-                                    source
-                                )
-
-
-                    st.session_state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": answer,
-                            "sources": sources,
-                        }
-                    )
-
-
-                except Exception as e:
-
-                    st.error(
-                        "답변 생성 중 오류가 발생했습니다."
-                    )
-
-                    st.exception(e)
+        render_user_message(question)
+        with st.spinner("관련 규정을 확인하고 있습니다..."):
+            try:
+                result = generate_answer(
+                    question=question,
+                    messages=previous_messages,
+                    vector_store=vector_store,
+                    retriever=retriever,
+                    chain=chain,
+                )
+                answer = result.get("answer")
+                sources = result.get("sources", [])
+                if not answer or not str(answer).strip():
+                    raise ValueError("응답에 answer가 없습니다.")
+                render_randy_message(answer, sources)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": answer, "sources": sources}
+                )
+            except Exception as e:
+                render_randy_error(error=e)
 
 
 # =========================================================
@@ -592,9 +383,13 @@ elif page == "📊 데이터 분석":
 
     with tab1:
 
-        st.subheader(
-            "🧠 골든셋 질문 임베딩"
-        )
+        title_col, image_col = st.columns([5, 1], vertical_alignment="center")
+        with title_col:
+            st.subheader("✨ 골든셋 질문 임베딩")
+        with image_col:
+            topic_mascot = ASSET_DIR / "아이디어 랜디.png"
+            if topic_mascot.exists():
+                st.image(topic_mascot, width=85)
 
 
         if not GOLDEN_SET_PATH.exists():
@@ -632,61 +427,12 @@ elif page == "📊 데이터 분석":
 
 
         # =================================================
-        # UMAP 설정
+        # 분석 파라미터는 서비스 화면에서 고정한다.
         # =================================================
 
-        max_neighbors = max(
-            2,
-            min(
-                30,
-                len(df) - 1,
-            ),
-        )
-
-
-        control1, control2, control3 = (
-            st.columns(3)
-        )
-
-
-        with control1:
-
-            cluster_count = st.slider(
-                "Cluster 수",
-                min_value=2,
-                max_value=min(
-                    10,
-                    len(df),
-                ),
-                value=min(
-                    5,
-                    len(df),
-                ),
-            )
-
-
-        with control2:
-
-            n_neighbors = st.slider(
-                "UMAP n_neighbors",
-                min_value=2,
-                max_value=max_neighbors,
-                value=min(
-                    15,
-                    max_neighbors,
-                ),
-            )
-
-
-        with control3:
-
-            min_dist = st.slider(
-                "UMAP min_dist",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.1,
-                step=0.05,
-            )
+        cluster_count = 5
+        n_neighbors = 5
+        min_dist = 0.1
 
 
         try:
@@ -706,6 +452,8 @@ elif page == "📊 데이터 분석":
                     analysis_df
                 )
             )
+            analysis_df, cluster_topics = add_cluster_topics(analysis_df)
+            cluster_summary["topic"] = cluster_summary["cluster"].map(cluster_topics)
 
         except Exception as e:
 
@@ -772,8 +520,8 @@ elif page == "📊 데이터 분석":
                 title="질문",
             ),
             alt.Tooltip(
-                "cluster:N",
-                title="Cluster",
+                "topic:N",
+                title="대표 topic",
             ),
         ]
 
@@ -805,10 +553,7 @@ elif page == "📊 데이터 분석":
                     "y:Q",
                     title="UMAP 2",
                 ),
-                color=alt.Color(
-                    "cluster:N",
-                    title="Cluster",
-                ),
+                color=alt.Color("topic:N", title="대표 topic"),
                 tooltip=tooltip_columns,
             )
             .interactive()
@@ -830,18 +575,21 @@ elif page == "📊 데이터 분석":
         )
 
 
-        st.bar_chart(
-            cluster_summary,
-            x="cluster",
-            y="question_count",
+        distribution_chart = (
+            alt.Chart(cluster_summary)
+            .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6)
+            .encode(
+                y=alt.Y("topic:N", title="대표 topic", sort="-x"),
+                x=alt.X("question_count:Q", title="질문 수"),
+                color=alt.Color("topic:N", legend=None),
+                tooltip=[
+                    alt.Tooltip("topic:N", title="대표 topic"),
+                    alt.Tooltip("question_count:Q", title="질문 수"),
+                ],
+            )
+            .properties(height=260)
         )
-
-
-        st.dataframe(
-            cluster_summary,
-            hide_index=True,
-            use_container_width=True,
-        )
+        st.altair_chart(distribution_chart, use_container_width=True)
 
 
         # =================================================
@@ -853,20 +601,12 @@ elif page == "📊 데이터 분석":
         )
 
 
-        selected_cluster = st.selectbox(
-            "Cluster 선택",
-            sorted(
-                analysis_df[
-                    "cluster"
-                ].unique()
-            ),
-        )
+        selected_topic = st.selectbox("대표 topic 선택", list(cluster_topics.values()))
 
 
         cluster_questions = (
             analysis_df[
-                analysis_df["cluster"]
-                == selected_cluster
+                analysis_df["topic"] == selected_topic
             ]
         )
 
@@ -876,8 +616,9 @@ elif page == "📊 데이터 분석":
             for col in [
                 "query_id",
                 "query",
-                "gold_chunks",
-                "cluster",
+                "gold_answer",
+                "source_documents",
+                "topic",
             ]
             if col in cluster_questions.columns
         ]
@@ -964,45 +705,41 @@ elif page == "📊 데이터 분석":
         # 평균 검색 시간
         # =================================================
 
-        st.subheader(
-            "🔍 평균 검색 시간"
-        )
+        def horizontal_metric_chart(value_column, title):
+            chart = (
+                alt.Chart(chart_df)
+                .mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5)
+                .encode(
+                    y=alt.Y("experiment:N", title=None, sort="-x"),
+                    x=alt.X(f"{value_column}:Q", title=title),
+                    color=alt.Color("model:N", legend=None),
+                    tooltip=[
+                        alt.Tooltip("experiment:N", title="실험"),
+                        alt.Tooltip(f"{value_column}:Q", title=title),
+                    ],
+                )
+                .properties(height=max(260, len(chart_df) * 42))
+            )
+            st.altair_chart(chart, use_container_width=True)
 
-        st.bar_chart(
-            chart_df,
-            x="experiment",
-            y="avg_search_time",
-        )
+        st.subheader("🔍 평균 검색 시간")
+        horizontal_metric_chart("avg_search_time", "평균 검색 시간")
 
 
         # =================================================
         # 평균 답변 생성 시간
         # =================================================
 
-        st.subheader(
-            "🤖 평균 답변 생성 시간"
-        )
-
-        st.bar_chart(
-            chart_df,
-            x="experiment",
-            y="avg_generation_time",
-        )
+        st.subheader("🤖 평균 답변 생성 시간")
+        horizontal_metric_chart("avg_generation_time", "평균 답변 생성 시간")
 
 
         # =================================================
         # 평균 전체 응답 시간
         # =================================================
 
-        st.subheader(
-            "⏱️ 평균 전체 응답 시간"
-        )
-
-        st.bar_chart(
-            chart_df,
-            x="experiment",
-            y="avg_total_time",
-        )
+        st.subheader("⏱️ 평균 전체 응답 시간")
+        horizontal_metric_chart("avg_total_time", "평균 전체 응답 시간")
 
 
         # =================================================

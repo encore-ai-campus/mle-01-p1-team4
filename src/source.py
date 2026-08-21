@@ -77,13 +77,7 @@ def build_sources(
 
         seen_sources.add(source_key)
 
-        if chunk_id:
-            source = (
-                f"{source_key} [{chunk_id}]"
-            )
-        else:
-            source = source_key
-
+        source = source_key
         sources.append(source)
 
     return sources

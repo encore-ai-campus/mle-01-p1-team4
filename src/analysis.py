@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 import pandas as pd
 import numpy as np
@@ -13,6 +14,17 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 EVALUATION_DIR = PROJECT_ROOT / "evaluation"
 RESULT_DIR = EVALUATION_DIR / "results"
+
+DOCUMENT_TOPICS = {
+    "급여규정": "급여·수당",
+    "복무규정": "복무·근태",
+    "연차_휴가에_관한_예규": "휴가·연차",
+    "여비규정": "출장·여비",
+    "인사규정": "인사·복무",
+    "승진임용규칙": "승진·인사",
+    "보안업무예규": "보안·자료",
+    "공간정보보안업무예규": "공간정보 보안",
+}
 
 
 def load_golden_set(csv_path):
@@ -105,6 +117,40 @@ def get_cluster_summary(
 
 
     return summary
+
+
+def add_cluster_topics(analysis_df):
+    """Add readable topic and source-document labels to cluster results."""
+    result = analysis_df.copy()
+
+    def document_names(value):
+        if pd.isna(value):
+            return []
+        names = []
+        for chunk_id in str(value).split("|"):
+            match = re.match(r"^(.+)_\d+$", chunk_id.strip())
+            if match:
+                names.append(match.group(1))
+        return names
+
+    result["source_documents"] = result.get("gold_chunks", "").apply(
+        lambda value: ", ".join(dict.fromkeys(document_names(value)))
+    )
+
+    cluster_topics = {}
+    for cluster_id, cluster_df in result.groupby("cluster"):
+        documents = []
+        for value in cluster_df.get("gold_chunks", []):
+            documents.extend(document_names(value))
+        if documents:
+            representative = pd.Series(documents).value_counts().index[0]
+            topic = DOCUMENT_TOPICS.get(representative, representative.replace("_", " "))
+        else:
+            topic = f"주제 {cluster_id}"
+        cluster_topics[cluster_id] = topic
+
+    result["topic"] = result["cluster"].map(cluster_topics)
+    return result, cluster_topics
 
 
 def build_embedding_analysis_from_embeddings(
