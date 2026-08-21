@@ -1,21 +1,30 @@
+import sys
+from pathlib import Path
+
 import streamlit as st
 import pandas as pd
 import altair as alt
-from pathlib import Path
 
-from src.home import (
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+SRC_DIR = PROJECT_ROOT / "src"
+
+sys.path.append(str(SRC_DIR))
+
+
+from home import (
     get_frequent_tasks,
     get_recommended_questions,
     get_department_info,
     get_regulation_pdfs,
 )
 
-from src.chatbot import (
+from chatbot import (
     initialize_rag,
     generate_answer,
 )
 
-from src.analysis import (
+from analysis import (
     load_golden_set,
     embed_questions,
     build_embedding_analysis_from_embeddings,
@@ -41,8 +50,6 @@ st.set_page_config(
 # app.py가 프로젝트 루트에 있으므로 parent 한 번만 사용
 # =========================================================
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-
 ASSET_DIR = PROJECT_ROOT / "src" / "assets"
 
 GOLDEN_SET_PATH = (
@@ -58,7 +65,6 @@ EXPERIMENT_SUMMARY_PATH = (
     / "experiment_summary.csv"
 )
 
-
 # =========================================================
 # Session State
 # =========================================================
@@ -72,6 +78,8 @@ if "pending_question" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "🏠 홈"
 
+if "next_page" not in st.session_state:
+    st.session_state.next_page = None
 
 # =========================================================
 # RAG Cache
@@ -129,10 +137,17 @@ def get_cached_experiment_summary(path_str):
 def move_to_chatbot(question):
 
     st.session_state.pending_question = question
-    st.session_state.page = "💬 규정 챗봇"
+    st.session_state.next_page = "💬 규정 챗봇"
 
     st.rerun()
 
+if st.session_state.next_page is not None:
+
+    st.session_state.page = (
+        st.session_state.next_page
+    )
+
+    st.session_state.next_page = None
 
 # =========================================================
 # Sidebar

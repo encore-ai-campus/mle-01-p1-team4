@@ -5,7 +5,6 @@ import numpy as np
 
 from sklearn.cluster import KMeans
 from umap import UMAP
-import matplotlib.pyplot as plt
 
 from ingest import get_embeddings
 
@@ -81,40 +80,6 @@ def cluster_embeddings(
     return labels
 
 
-def build_embedding_analysis(
-    df,
-    n_clusters=5,
-    n_neighbors=15,
-    min_dist=0.1,
-):
-
-
-    embeddings = embed_questions(
-        df
-    )
-
-    reduced = reduce_embeddings(
-        embeddings=embeddings,
-        n_neighbors=n_neighbors,
-        min_dist=min_dist,
-    )
-
-
-    clusters = cluster_embeddings(
-        embeddings=embeddings,
-        n_clusters=n_clusters,
-    )
-
-    result = df.copy()
-
-    result["x"] = reduced[:, 0]
-
-    result["y"] = reduced[:, 1]
-
-    result["cluster"] = clusters
-
-    return result
-
 
 def get_cluster_summary(
     analysis_df,
@@ -141,77 +106,6 @@ def get_cluster_summary(
 
     return summary
 
-
-def load_experiment_result(
-    csv_path,
-    model_name,
-    k,
-):
-
-    df = pd.read_csv(
-        csv_path
-    )
-
-    df["model"] = model_name
-    df["k"] = k
-
-    return df
-
-
-def summarize_experiment(df):
-
-    summary = {
-        "model": df["model"].iloc[0],
-        "k": df["k"].iloc[0],
-
-        "avg_search_time": df[
-            "검색 시간(초)"
-        ].mean(),
-
-        "avg_generation_time": df[
-            "답변 생성 시간(초)"
-        ].mean(),
-
-        "avg_total_time": df[
-            "질문 전체 시간(초)"
-        ].mean(),
-    }
-
-
-    return summary
-
-
-def compare_experiments(
-    experiments,
-):
-
-    summaries = []
-
-    for experiment in experiments:
-
-        df = load_experiment_result(
-            csv_path=experiment["path"],
-            model_name=experiment["model"],
-            k=experiment["k"],
-        )
-
-        summary = summarize_experiment(
-            df
-        )
-
-        summaries.append(
-            summary
-        )
-
-    result = pd.DataFrame(
-        summaries
-    )
-
-    result = result.sort_values(
-        ["model", "k"]
-    )
-
-    return result
 
 def build_embedding_analysis_from_embeddings(
     df,

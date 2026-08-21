@@ -65,11 +65,11 @@ def get_recommended_questions():
     """
 
     questions = [
-        "연차휴가 사용 기준은 어떻게 되나요?",
-        "초과근무수당 지급 기준은 무엇인가요?",
-        "출장 여비는 어떤 기준으로 지급되나요?",
-        "승진에 필요한 기준은 무엇인가요?",
-        "휴직 중 급여는 어떻게 지급되나요?",
+    '점심시간은 몇 시부터 몇 시까지인가요?',
+    '휴직 중에도 직무급을 받을 수 있나요?',
+    '1급 이하 직원의 국내 출장 식비는 얼마인가요?',
+    '시간단위 연차 사용 기준은 어떻게 되나요?',
+    '숙박비 지역별 상한액은 얼마인가요?'
     ]
 
     return questions
@@ -133,7 +133,9 @@ def get_regulation_pdfs():
     if not RAW_PDF_DIR.exists():
         return pdfs
 
-    for pdf_path in RAW_PDF_DIR.glob("*.pdf"):
+    for pdf_path in sorted(
+        RAW_PDF_DIR.glob("*.pdf")
+    ):
         pdfs.append(
             {
                 "document_name": pdf_path.stem,
@@ -143,40 +145,3 @@ def get_regulation_pdfs():
 
     return pdfs
 
-
-# =========================================================
-# 직접 실행 테스트
-# =========================================================
-
-if __name__ == "__main__":
-
-    # 1. 자주 찾는 업무
-    tasks = get_frequent_tasks()
-
-    print("=== 자주 찾는 업무 ===")
-    print(tasks)
-
-    # 2. 추천 질문
-    questions = get_recommended_questions()
-
-    print("\n=== 추천 질문 ===")
-    print(questions)
-
-    # 3. 담당 부서
-    departments = get_department_info()
-
-    print("\n=== 담당 부서 ===")
-    print(departments)
-
-    # 4. PDF
-    pdfs = get_regulation_pdfs()
-
-    print("\n=== 규정 PDF ===")
-    print(pdfs)
-
-    # 5. 결과 개수 확인
-    print("\n=== 결과 개수 ===")
-    print("자주 찾는 업무:", len(tasks))
-    print("추천 질문:", len(questions))
-    print("담당 부서:", len(departments))
-    print("PDF:", len(pdfs))
