@@ -1,6 +1,11 @@
 import streamlit as st
 
-from retriever import load_vector_store, get_retriever, build_context
+from retriever import (
+    load_vector_store,
+    get_retriever,
+    build_context,
+    expand_related_appendices,
+)
 from rag_chain import create_rag_chain
 from source import build_sources
 from query_rewriter import rewrite_query, format_chat_history
@@ -21,12 +26,12 @@ def initialize_rag():
 
     retriever = get_retriever(
         store=vector_store,
-        k=5,
+        k=10,
     )
 
     chain = create_rag_chain()
 
-    return retriever, chain
+    return vector_store, retriever, chain
 
 
 st.title("📚 사내 규정 챗봇")
@@ -34,7 +39,7 @@ st.caption("사내 규정을 기반으로 질문에 답변합니다.")
 
 
 try:
-    retriever, chain = initialize_rag()
+    vector_store, retriever, chain = initialize_rag()
 
 except Exception as e:
     st.error("RAG 시스템을 초기화하는 중 오류가 발생했습니다.")
@@ -131,8 +136,11 @@ if question:
                 # -------------------------------------------------
                 # Retriever에는 검색에 최적화된 질문 사용
                 # -------------------------------------------------
-                docs = retriever.invoke(
-                    search_question
+                docs = retriever.invoke(search_question)
+
+                docs = expand_related_appendices(
+                    store=vector_store,
+                    documents=docs,
                 )
 
                 # -------------------------------------------------

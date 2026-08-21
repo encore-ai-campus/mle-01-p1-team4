@@ -1,5 +1,6 @@
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
+import re
 
 from ingest import (
     CHROMA_PATH,
@@ -103,3 +104,84 @@ def retrieve_context(
     )
 
     return results, context_docs, context
+
+
+def expand_related_appendices(
+    store: Chroma,
+    documents: list[Document],
+) -> list[Document]:
+    """
+    검색된 본문에서 '별표 N' 참조를 찾고,
+    같은 문서의 해당 별표 chunk를 추가합니다.
+    """
+
+    expanded_docs = list(documents)
+
+    seen_chunk_ids = {
+        doc.metadata.get("chunk_id")
+        for doc in documents
+        if doc.metadata.get("chunk_id")
+    }
+
+    for doc in documents:
+        document_name = doc.metadata.get("document_name")
+
+        if not document_name:
+            continue
+
+        # 예: "별표 1", "별표1"
+        appendix_matches = re.findall(
+            r"별표\s*(\d+)",
+            doc.page_content,
+        )
+
+        for appendix_number in appendix_matches:
+            appendix_no = f"별표 {appendix_number}"
+
+            result = store.get(
+                where={
+                    "$and": [
+                        {
+                            "document_name": {
+                                "$eq": document_name
+                            }
+                        },
+                        {
+                            "appendix_no": {
+                                "$eq": appendix_no
+                            }
+                        },
+                    ]
+                }
+            )
+
+            documents_data = result.get("documents", [])
+            metadatas_data = result.get("metadatas", [])
+            ids_data = result.get("ids", [])
+
+            for content, metadata, chunk_id in zip(
+                documents_data,
+                metadatas_data,
+                ids_data,
+            ):
+                if chunk_id in seen_chunk_ids:
+                    continue
+
+                metadata = metadata or {}
+
+                # Chroma id와 metadata chunk_id를 맞춰둠
+                metadata["chunk_id"] = metadata.get(
+                    "chunk_id",
+                    chunk_id,
+                )
+
+                expanded_docs.append(
+                    Document(
+                        page_content=content,
+                        metadata=metadata,
+                    )
+                )
+
+                seen_chunk_ids.add(chunk_id)
+
+    return expanded_docs
