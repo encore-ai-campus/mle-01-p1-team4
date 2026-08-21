@@ -300,6 +300,7 @@ if page == "🏠 홈":
 
 elif page == "💬 규정 챗봇":
     inject_chatbot_css()
+    st.markdown('<div class="chatbot-page-title"><h1>사내 규정 AI 챗봇</h1><p class="chatbot-page-caption">사내 규정을 기반으로 필요한 기준과 근거 문서를 빠르게 찾아드려요.</p></div>', unsafe_allow_html=True)
     try:
         vector_store, retriever, chain = get_cached_rag()
     except Exception as e:
@@ -312,7 +313,7 @@ elif page == "💬 규정 챗봇":
 
     for message in st.session_state.messages:
         if message["role"] == "assistant":
-            render_randy_message(message["content"], message.get("sources"))
+            render_randy_message(message["content"], message.get("sources"), ASSET_DIR)
         else:
             render_user_message(message["content"])
 
@@ -343,10 +344,16 @@ elif page == "💬 규정 챗봇":
                 sources = result.get("sources", [])
                 if not answer or not str(answer).strip():
                     raise ValueError("응답에 answer가 없습니다.")
-                render_randy_message(answer, sources)
+                render_randy_message(answer, sources, ASSET_DIR)
                 st.session_state.messages.append(
                     {"role": "assistant", "content": answer, "sources": sources}
                 )
+                follow_col1, follow_col2 = st.columns(2)
+                for follow_col, followup in zip((follow_col1, follow_col2), ("연차 신청 절차도 알려줘", "휴가 종류를 비교해줘")):
+                    with follow_col:
+                        if st.button(followup, key=f"followup_{len(st.session_state.messages)}_{followup}", use_container_width=True):
+                            st.session_state.pending_question = followup
+                            st.rerun()
             except Exception as e:
                 render_randy_error(error=e)
 
