@@ -1,0 +1,6 @@
+﻿model,k,avg_search_time,avg_generation_time,avg_total_time
+gpt-4o-mini,5,4.264,1.383,5.649
+gpt-4o-mini,6,3.698,1.365,5.066
+gpt-4o-mini,10,3.687,1.496,5.187
+gpt-5-mini,5,3.664,10.96,14.627
+gpt-5-mini,6,4.133,10.964,15.099

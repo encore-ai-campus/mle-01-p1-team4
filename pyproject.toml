@@ -14,11 +14,13 @@ dependencies = [
     "langchain-openai",
     "langchain-text-splitters",
     "langchain-upstage>=0.7.7",
+    "matplotlib>=3.11.1",
     "pypdf",
     "python-dotenv",
     "requests>=2.34.2",
     "sentence-transformers>=5.7.0",
     "streamlit",
+    "umap-learn>=0.5.12",
 ]
 
 [dependency-groups]
