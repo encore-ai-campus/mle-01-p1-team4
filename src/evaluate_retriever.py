@@ -97,103 +97,88 @@ def evaluate(k):
 
     return pd.DataFrame(rows)
 
+scores_by_k = {}
+compare_rows = []
 
-scores_k3 = evaluate(3)
-scores_k10 = evaluate(10)
+for k in range(3, 11):
+    # 현재 K값으로 평가
+    scores = evaluate(k)
 
+    # K별 평가 결과 보관
+    scores_by_k[k] = scores
 
-print(
-    "잰 문항 수:",
-    len(scores_k3),
-)
+    # 질문 내용 추가
+    detail = scores.merge(
+        evalset[
+            ["query_id", "query"]
+        ],
+        on="query_id",
+    )
 
+    # K별 상세 결과 출력
+    print(f"\nK = {k} 질문별 상세 결과")
 
-# K=3 질문별 상세 결과
-detail = scores_k3.merge(
-    evalset[
-        ["query_id", "query"]
-    ],
-    on="query_id",
-)
+    print(
+        detail[
+            [
+                "query_id",
+                "Hit",
+                "P",
+                "R",
+                "MRR",
+                "query",
+            ]
+        ].round(3)
+    )
+    # K별 상세 결과 저장
+    detail.to_csv(
+        RESULT_DIR / f"retriever_k{k}_detail.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
 
-print(
-    detail[
-        [
-            "query_id",
-            "Hit",
-            "P",
-            "R",
-            "MRR",
-            "query",
-        ]
-    ].round(3)
-)
-
-
-# K=3 평균
-print("\nK = 3 평균")
-
-print(
-    scores_k3[
-        ["Hit", "P", "R", "MRR"]
-    ]
-    .mean()
-    .round(3)
-    .to_string()
-)
-
-
-# K=3 / K=10 비교
-compare = pd.DataFrame([
-    {
-        "K": 3,
-        **scores_k3[
+    # 현재 K의 평균 점수
+    average_scores = (
+        scores[
             ["Hit", "P", "R", "MRR"]
         ]
         .mean()
         .round(3)
-        .to_dict(),
-    },
-    {
-        "K": 10,
-        **scores_k10[
-            ["Hit", "P", "R", "MRR"]
-        ]
-        .mean()
-        .round(3)
-        .to_dict(),
-    },
-])
+    )
+
+    print(f"\nK = {k} 평균")
+    print(average_scores.to_string())
+
+    # K별 평균 비교표에 추가
+    compare_rows.append({
+        "K": k,
+        **average_scores.to_dict(),
+    })
+
+
+# K=3부터 K=10까지 평균 비교표
+compare = pd.DataFrame(compare_rows)
 
 print("\nK 비교")
-
 print(
     compare.to_string(
         index=False
     )
 )
 
-RESULT_DIR = "evaluation/results"
-
-detail.to_csv(
-    f"{RESULT_DIR}/retriever_k3_detail.csv",
-    index=False,
-    encoding="utf-8-sig",
-)
-
-scores_k10_detail = scores_k10.merge(
-    evalset[["query_id", "query"]],
-    on="query_id",
-)
-
-scores_k10_detail.to_csv(
-    f"{RESULT_DIR}/retriever_k10_detail.csv",
-    index=False,
-    encoding="utf-8-sig",
-)
-
+# 평균 비교표 저장
 compare.to_csv(
-    f"{RESULT_DIR}/retriever_k_compare.csv",
+    RESULT_DIR / "retriever_k_compare.csv",
     index=False,
     encoding="utf-8-sig",
+)
+
+print(
+    "\n평가한 문항 수:",
+    len(evalset),
+)
+
+print(
+    "평가한 K값 수:",
+    len(scores_by_k),
 )

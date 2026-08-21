@@ -5,7 +5,7 @@ from rag_chain import create_rag_chain
 from source import build_sources
 
 
-EVALSET_PATH = "evaluation/golden_set10.csv"
+EVALSET_PATH = "evaluation/golden_set.csv"
 
 evalset = pd.read_csv(
     EVALSET_PATH,

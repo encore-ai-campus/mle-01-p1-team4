@@ -7,7 +7,7 @@ from langchain_openai import ChatOpenAI
 
 def create_rag_chain():
 
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
 
     # 2. Prompt 생성
     prompt = ChatPromptTemplate.from_messages(
