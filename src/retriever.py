@@ -15,7 +15,6 @@ def load_vector_store():
         embedding_function=embeddings,
         persist_directory=CHROMA_PATH,
     )
-
     return store
 
 def get_retriever(
