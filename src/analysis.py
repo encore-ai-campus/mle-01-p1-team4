@@ -38,16 +38,11 @@ def load_golden_set(csv_path):
     return df
 
 
-def embed_questions(df):
-
-    embedding_model = get_embeddings()
-
+def embed_questions(df, embedding_model=None):
+    if embedding_model is None:
+        embedding_model = get_embeddings()
     questions = df["query"].tolist()
-
-    vectors = embedding_model.embed_documents(
-        questions
-    )
-
+    vectors = embedding_model.embed_documents(questions)
     return np.array(vectors)
 
 
