@@ -15,17 +15,10 @@ from query_rewriter import (
 from source import build_sources
 
 
-def initialize_rag():
-
-    vector_store = load_vector_store()
-
-    retriever = get_retriever(
-        store=vector_store,
-        k=10,
-    )
-
+def initialize_rag(embeddings=None):
+    vector_store = load_vector_store(embeddings=embeddings)
+    retriever = get_retriever(store=vector_store, k=10)
     chain = create_rag_chain()
-
     return vector_store, retriever, chain
 
 

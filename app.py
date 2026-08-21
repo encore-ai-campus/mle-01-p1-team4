@@ -25,14 +25,6 @@ from chatbot import (
     generate_answer,
 )
 
-from analysis import (
-    load_golden_set,
-    embed_questions,
-    build_embedding_analysis_from_embeddings,
-    get_cluster_summary,
-    load_experiment_summary,
-    add_cluster_topics,
-)
 
 from chat_ui import (
     inject_chatbot_css,
@@ -43,6 +35,7 @@ from chat_ui import (
     render_randy_error,
 )
 
+from ingest import get_embeddings
 
 # =========================================================
 # Streamlit 기본 설정
@@ -140,6 +133,19 @@ def get_cached_experiment_summary(path_str):
         Path(path_str)
     )
 
+@st.cache_resource
+def get_cached_embedding_model():
+    return get_embeddings()
+
+@st.cache_resource
+def get_cached_rag():
+    embeddings = get_cached_embedding_model()
+    return initialize_rag(embeddings=embeddings)
+
+@st.cache_data(show_spinner=False)
+def get_cached_embeddings(path_str, _embedding_model):
+    df = get_cached_golden_set(path_str)
+    return embed_questions(df, _embedding_model)
 
 # =========================================================
 # 홈 → 챗봇 이동 함수
@@ -377,6 +383,15 @@ elif page == "💬 규정 챗봇":
 
 elif page == "📊 데이터 분석":
 
+    # 이 페이지에 들어올 때만 무거운 라이브러리 로드
+    from analysis import (
+        load_golden_set,
+        embed_questions,
+        build_embedding_analysis_from_embeddings,
+        get_cluster_summary,
+        load_experiment_summary,
+        add_cluster_topics,
+    )
     st.title(
         "📊 RAG 데이터 분석"
     )

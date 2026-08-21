@@ -8,9 +8,9 @@ from ingest import (
     get_embeddings,
 )
 
-def load_vector_store():
-    embeddings = get_embeddings()
-
+def load_vector_store(embeddings=None):
+    if embeddings is None:
+        embeddings = get_embeddings()
     store = Chroma(
         collection_name=COLLECTION_NAME,
         embedding_function=embeddings,
@@ -106,82 +106,46 @@ def retrieve_context(
     return results, context_docs, context
 
 
-def expand_related_appendices(
-    store: Chroma,
-    documents: list[Document],
-) -> list[Document]:
-    """
-    검색된 본문에서 '별표 N' 참조를 찾고,
-    같은 문서의 해당 별표 chunk를 추가합니다.
-    """
+from collections import defaultdict
 
+def expand_related_appendices(store: Chroma, documents: list[Document]) -> list[Document]:
     expanded_docs = list(documents)
-
     seen_chunk_ids = {
         doc.metadata.get("chunk_id")
         for doc in documents
         if doc.metadata.get("chunk_id")
     }
 
+    # 1) 필요한 (document_name, appendix_no)를 먼저 전부 수집 (중복 제거)
+    appendices_by_doc = defaultdict(set)
     for doc in documents:
         document_name = doc.metadata.get("document_name")
-
         if not document_name:
             continue
+        for appendix_number in re.findall(r"별표\s*(\d+)", doc.page_content):
+            appendices_by_doc[document_name].add(f"별표 {appendix_number}")
 
-        # 예: "별표 1", "별표1"
-        appendix_matches = re.findall(
-            r"별표\s*(\d+)",
-            doc.page_content,
+    # 2) document_name 하나당 쿼리 1번 (appendix_no는 $in으로 한 번에)
+    for document_name, appendix_nos in appendices_by_doc.items():
+        result = store.get(
+            where={
+                "$and": [
+                    {"document_name": {"$eq": document_name}},
+                    {"appendix_no": {"$in": list(appendix_nos)}},
+                ]
+            }
         )
 
-        for appendix_number in appendix_matches:
-            appendix_no = f"별표 {appendix_number}"
-
-            result = store.get(
-                where={
-                    "$and": [
-                        {
-                            "document_name": {
-                                "$eq": document_name
-                            }
-                        },
-                        {
-                            "appendix_no": {
-                                "$eq": appendix_no
-                            }
-                        },
-                    ]
-                }
-            )
-
-            documents_data = result.get("documents", [])
-            metadatas_data = result.get("metadatas", [])
-            ids_data = result.get("ids", [])
-
-            for content, metadata, chunk_id in zip(
-                documents_data,
-                metadatas_data,
-                ids_data,
-            ):
-                if chunk_id in seen_chunk_ids:
-                    continue
-
-                metadata = metadata or {}
-
-                # Chroma id와 metadata chunk_id를 맞춰둠
-                metadata["chunk_id"] = metadata.get(
-                    "chunk_id",
-                    chunk_id,
-                )
-
-                expanded_docs.append(
-                    Document(
-                        page_content=content,
-                        metadata=metadata,
-                    )
-                )
-
-                seen_chunk_ids.add(chunk_id)
+        for content, metadata, chunk_id in zip(
+            result.get("documents", []),
+            result.get("metadatas", []),
+            result.get("ids", []),
+        ):
+            if chunk_id in seen_chunk_ids:
+                continue
+            metadata = metadata or {}
+            metadata["chunk_id"] = metadata.get("chunk_id", chunk_id)
+            expanded_docs.append(Document(page_content=content, metadata=metadata))
+            seen_chunk_ids.add(chunk_id)
 
     return expanded_docs
