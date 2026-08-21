@@ -169,6 +169,9 @@ html, body, [class*="css"] { font-family:'Noto Sans KR', sans-serif; }
 [data-testid="stSidebar"] { background:#f8fbfa; border-right:1px solid #e4ece9; }
 [data-testid="stSidebar"] { min-width:16vw; max-width:16vw; }
 [data-testid="stSidebar"] section { padding:2rem 1rem; }
+[data-testid="stSidebar"] [role="radiogroup"] label > div:first-child { display:none; }
+[data-testid="stSidebar"] [role="radiogroup"] label { border-radius:10px; padding:.65rem .75rem; margin:.2rem 0; color:#25352e; }
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) { background:#168b54; color:#fff; }
 .brand { text-align:center; padding:.3rem 0 1.8rem; }
 .brand-mark { color:var(--green); font-size:3.5rem; font-weight:800; letter-spacing:-.12em; line-height:1; }
 .brand-name { font-weight:800; font-size:1rem; margin-top:.7rem; }
@@ -186,7 +189,6 @@ html, body, [class*="css"] { font-family:'Noto Sans KR', sans-serif; }
 .card { background:#fff; border:1px solid var(--line); border-radius:18px; padding:1.2rem 1.3rem; box-shadow:0 5px 18px rgba(17,48,39,.05); height:100%; }
 .card h3 { margin:0 0 .7rem; font-size:1.15rem; letter-spacing:-.04em; }
 .card-desc { color:#68736f; font-size:.9rem; margin-bottom:.8rem; }
-.pdf-card { min-height:112px; display:flex; flex-direction:column; justify-content:space-between; }
 .pdf-icon { font-size:1.65rem; }
 .pdf-name { font-weight:700; font-size:.92rem; line-height:1.35; }
 .rank-row { display:flex; align-items:center; gap:.7rem; padding:.65rem 0; border-bottom:1px solid #edf1ef; font-size:.9rem; }
@@ -194,13 +196,19 @@ html, body, [class*="css"] { font-family:'Noto Sans KR', sans-serif; }
 .rank { width:25px; height:25px; display:grid; place-items:center; border-radius:50%; background:#e7f4ed; color:var(--green); font-weight:800; }
 .recent-row { padding:.55rem 0; border-bottom:1px solid #edf1ef; font-size:.9rem; }
 .recent-row:last-child { border-bottom:0; }
+.department-table { width:100%; border-collapse:collapse; font-size:.78rem; color:#24312c; }
+.department-table th { background:#edf3f0; font-weight:700; text-align:left; padding:.45rem .5rem; border-bottom:1px solid #dfe8e3; }
+.department-table td { padding:.45rem .5rem; border-bottom:1px solid #edf1ef; vertical-align:top; }
+.department-table tr:last-child td { border-bottom:0; }
+.stButton > button { border-radius:12px; border:1px solid #e1e8e5; background:#fff; color:#16231e; min-height:46px; }
+.stButton > button:hover { border-color:#168b54; color:#0b6b3a; }
 @media (max-width: 900px) { .hero-mascot { opacity:.35; right:-35px; } .hero h1 { font-size:1.65rem; } }
 @media (max-width: 900px) { [data-testid="stSidebar"] { min-width:0; max-width:none; } .speech { right:25%; transform:scale(.82); transform-origin:top right; } }
 </style>
 """, unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown('<div class="brand"><div class="brand-mark">LX</div><div class="brand-name">한국국토정보공사</div><div class="brand-sub">AI 규정 대시보드</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand"><div class="brand-mark">LX</div><div class="brand-name">한국국토정보공사</div><div class="brand-sub">LXpert</div></div>', unsafe_allow_html=True)
     page = st.radio("메뉴", ["🏠 홈", "💬 규정 챗봇", "📊 데이터 분석"], key="page", label_visibility="collapsed")
     st.divider()
     if st.button("🗑️ 대화 초기화", use_container_width=True):
@@ -231,25 +239,24 @@ if page == "🏠 홈":
     if popular_keyword:
         move_to_chatbot(f"{popular_keyword} 관련 규정을 알려줘")
 
-    st.markdown('<div class="section-title">🚀 <span>규정 원문</span> 바로가기</div>', unsafe_allow_html=True)
     try:
         tasks = get_frequent_tasks()
     except Exception:
         tasks = []
-    if tasks:
-        task_cols = st.columns(4, gap="small")
-        for index, task in enumerate(tasks):
-            with task_cols[index % 4]:
-                st.markdown(f'<div class="card pdf-card"><div class="pdf-icon">{task["icon"]}</div><div class="pdf-name">{task["label"]}</div></div>', unsafe_allow_html=True)
-                pdf_path = task["path"]
-                if pdf_path.exists():
-                    st.download_button("PDF 원문 다운로드", data=pdf_path.read_bytes(), file_name=pdf_path.name, mime="application/pdf", key=f"pdf_{index}", use_container_width=True)
-
-
     upper_left, upper_right = st.columns(2, gap="medium")
     lower_left, lower_right = st.columns(2, gap="medium")
 
     with upper_left:
+        with st.container(border=True):
+            st.markdown("### 🚀 자주 찾는 업무")
+            st.caption("필요한 업무를 빠르게 확인해보세요.")
+            task_cols = st.columns(3, gap="small")
+            for index, task in enumerate(tasks[:6]):
+                with task_cols[index % 3]:
+                    if st.button(f'{task["icon"]}  {task["label"]}', key=f"task_{index}", use_container_width=True):
+                        move_to_chatbot(task["question"])
+
+    with upper_right:
         with st.container(border=True):
             st.markdown("### 💡 추천 질문")
             st.caption("자주 확인하는 규정을 빠르게 찾아보세요.")
@@ -265,16 +272,6 @@ if page == "🏠 홈":
                     if st.button(question, key=f"recommended_{index}", use_container_width=True):
                         move_to_chatbot(question)
 
-    with upper_right:
-        with st.container(border=True):
-            st.markdown("### ☎ 담당 부서 안내")
-            st.caption("규정만으로 해결되지 않는 경우, 담당 부서에 문의해 주세요.")
-            try:
-                departments = pd.DataFrame(get_department_info())
-                st.dataframe(departments, hide_index=True, use_container_width=True)
-            except Exception:
-                st.info("담당 부서 정보가 없습니다.")
-
     with lower_left:
         with st.container(border=True):
             st.markdown("### 🕘 나의 최근 질문")
@@ -288,9 +285,19 @@ if page == "🏠 홈":
 
     with lower_right:
         with st.container(border=True):
-            st.markdown("### 📚 규정 이용 안내")
-            st.caption("왼쪽의 원문 카드에서 실제 PDF 규정을 바로 다운로드할 수 있습니다.")
-            st.markdown("검색 결과가 필요하면 상단 검색창을 이용해 주세요.")
+            st.markdown("### ☎ 담당 부서 안내")
+            st.caption("규정만으로 해결되지 않는 경우, 담당 부서에 문의해 주세요.")
+            try:
+                departments = get_department_info()
+                headers = ["업무 분야", "지사/부서", "연락처"]
+                rows = "".join(
+                    "<tr>" + "".join(f"<td>{item.get(header, '')}</td>" for header in headers) + "</tr>"
+                    for item in departments
+                )
+                table = "<table class='department-table'><thead><tr>" + "".join(f"<th>{header}</th>" for header in headers) + f"</tr></thead><tbody>{rows}</tbody></table>"
+                st.markdown(table, unsafe_allow_html=True)
+            except Exception:
+                st.info("담당 부서 정보가 없습니다.")
 
 
 # =========================================================
@@ -300,21 +307,15 @@ if page == "🏠 홈":
 
 elif page == "💬 규정 챗봇":
     inject_chatbot_css()
+    st.markdown(
+        '<h1 class="chatbot-page-title">💬 사내 문서 챗봇</h1>',
+        unsafe_allow_html=True,
+    )
     try:
         vector_store, retriever, chain = get_cached_rag()
     except Exception as e:
         render_randy_error("랜디가 규정 검색을 준비하지 못했어요.\n\n잠시 후 다시 시도해 주세요.", e)
         st.stop()
-
-    if not st.session_state.messages:
-        render_chat_welcome()
-        render_example_questions()
-
-    for message in st.session_state.messages:
-        if message["role"] == "assistant":
-            render_randy_message(message["content"], message.get("sources"), ASSET_DIR)
-        else:
-            render_user_message(message["content"])
 
     typed_question = st.chat_input("예: 시간단위 연차 사용 기준은 어떻게 되나요?", key="chatbot_question_input")
     pending_question = st.session_state.pending_question
@@ -323,6 +324,16 @@ elif page == "💬 규정 챗봇":
         st.session_state.pending_question = None
     else:
         question = typed_question
+
+    if not st.session_state.messages and not question:
+        render_chat_welcome()
+        render_example_questions()
+
+    for message in st.session_state.messages:
+        if message["role"] == "assistant":
+            render_randy_message(message["content"], message.get("sources"), ASSET_DIR)
+        else:
+            render_user_message(message["content"])
 
     if question:
         previous_messages = st.session_state.messages.copy()
@@ -343,18 +354,20 @@ elif page == "💬 규정 챗봇":
                 sources = result.get("sources", [])
                 if not answer or not str(answer).strip():
                     raise ValueError("응답에 answer가 없습니다.")
-                render_randy_message(answer, sources, ASSET_DIR)
                 st.session_state.messages.append(
                     {"role": "assistant", "content": answer, "sources": sources}
                 )
-                follow_col1, follow_col2 = st.columns(2)
-                for follow_col, followup in zip((follow_col1, follow_col2), ("연차 신청 절차도 알려줘", "휴가 종류를 비교해줘")):
-                    with follow_col:
-                        if st.button(followup, key=f"followup_{len(st.session_state.messages)}_{followup}", use_container_width=True):
-                            st.session_state.pending_question = followup
-                            st.rerun()
+                st.rerun()
             except Exception as e:
-                render_randy_error(error=e)
+                render_randy_error(error=e, asset_dir=ASSET_DIR)
+
+    if st.session_state.messages and st.session_state.messages[-1].get("role") == "assistant" and not question:
+        follow_col1, follow_col2 = st.columns(2)
+        for follow_col, followup in zip((follow_col1, follow_col2), ("연차 신청 절차도 알려줘", "휴가 종류를 비교해줘")):
+            with follow_col:
+                if st.button(followup, key=f"followup_{len(st.session_state.messages)}_{followup}", use_container_width=True):
+                    st.session_state.pending_question = followup
+                    st.rerun()
 
 
 # =========================================================

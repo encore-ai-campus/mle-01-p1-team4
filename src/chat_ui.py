@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from PIL import Image, ImageChops
 import streamlit as st
 
 
@@ -19,13 +20,45 @@ def get_randy_avatar(kind="hello"):
     return str(path) if path.exists() else fallback
 
 
+@st.cache_data(show_spinner=False)
+def load_cropped_randy_image(image_path_str):
+    image_path = Path(image_path_str)
+    if not image_path.exists():
+        return None
+
+    image = Image.open(image_path).convert("RGBA")
+    alpha = image.getchannel("A")
+    bbox = alpha.getbbox()
+    full_bbox = (0, 0, image.width, image.height)
+
+    if bbox == full_bbox:
+        background = Image.new("RGBA", image.size, image.getpixel((0, 0)))
+        difference = ImageChops.difference(image, background).convert("L")
+        difference = difference.point(lambda value: 255 if value > 15 else 0)
+        detected_bbox = difference.getbbox()
+        if detected_bbox:
+            bbox = detected_bbox
+
+    if bbox:
+        image = image.crop(bbox)
+
+    padding = 10
+    padded = Image.new(
+        "RGBA",
+        (image.width + padding * 2, image.height + padding * 2),
+        (0, 0, 0, 0),
+    )
+    padded.paste(image, (padding, padding), image)
+    return padded
+
+
 def inject_chatbot_css():
     st.markdown(
         """
         <style>
         section.main > div { padding-top:1rem !important; padding-bottom:6rem !important; }
         .chatbot-page { background:#F8F8F3; }
-        .chatbot-page-title { color:#1F3029; letter-spacing:-.04em; margin-top:0; }
+        .chatbot-page-title { color:#1F3029; letter-spacing:-.04em; margin:0 0 1.1rem; font-size:2rem; font-weight:800; }
         .chatbot-page-caption { color:#66736E; margin-bottom:.4rem; }
         .chatbot-guide { background:#F4FAF5; border:1px solid #DFE9E1; border-radius:16px; padding:1rem 1.1rem; min-height:135px; }
         .chatbot-guide h4 { margin:0 0 .45rem; color:#0B6B3A; }
@@ -33,10 +66,9 @@ def inject_chatbot_css():
         .chatbot-brand { color:#0B6B3A; font-size:.78rem; font-weight:700; margin-bottom:.25rem; }
         .chatbot-error { background:#FFF7F5; border:1px solid #F2D8D2; border-radius:14px; padding:.9rem 1rem; color:#7A3228; }
         [data-testid="stChatMessage"] { border-radius:14px; }
-        .chatbot-answer-row { display:flex; gap:18px; align-items:flex-start; max-width:980px; margin:.6rem auto 1.1rem; }
-        .chatbot-randy-image { width:152px; height:152px; object-fit:contain; flex:0 0 152px; }
-        .chatbot-answer-card { background:#F4FAF5; border:1px solid #D6E7D9; border-left:4px solid #159447; border-radius:0 14px 14px 14px; padding:1rem 1.2rem; color:#243B32; flex:1; }
-        .randy-name { display:inline-block; color:#0B6B3A; background:#EDF7EF; border:1px solid #CFE4D3; border-radius:999px; padding:.25rem .65rem; font-size:.86rem; font-weight:700; margin-bottom:.8rem; }
+        .randy-name { display:inline-block; color:#0B6B3A; background:#EDF7EF; border:1px solid #CFE4D3; border-radius:999px; padding:.25rem .65rem; font-size:.86rem; font-weight:700; margin-bottom:.7rem; }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.randy-name) { background:#F4FAF5; border:1px solid #D6E7D9; border-left:4px solid #159447; border-radius:0 16px 16px 16px; box-shadow:0 8px 24px rgba(30,88,55,.06); }
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.randy-name) div[data-testid="stExpander"] { background:#FFFFFF; border-color:#DCE7DE; }
         .chatbot-user-row { display:flex; justify-content:flex-end; max-width:980px; margin:.7rem auto; }
         .chatbot-user-card { max-width:62%; background:#F3F4F3; border:1px solid #DDE2DF; border-radius:16px; padding:.75rem 1rem; color:#26352F; }
         .chatbot-followups { max-width:980px; margin:0 auto 1rem; }
@@ -57,13 +89,6 @@ EXAMPLE_QUESTIONS = [
 
 
 def render_chat_welcome():
-    title_col, image_col = st.columns([5, 1], vertical_alignment="center")
-    with title_col:
-        st.markdown('<h1 class="chatbot-page-title">💬 사내 규정 AI 챗봇</h1>', unsafe_allow_html=True)
-        st.markdown('<p class="chatbot-page-caption">사내 규정을 기반으로 필요한 기준과 근거 문서를 빠르게 찾아드려요.</p>', unsafe_allow_html=True)
-    with image_col:
-        st.image(get_randy_avatar("computer"), width=290)
-
     guide_left, guide_right = st.columns(2, gap="medium")
     with guide_left:
         st.markdown(
@@ -80,7 +105,9 @@ def render_chat_welcome():
 def render_example_questions():
     idea_col, _ = st.columns([1, 4])
     with idea_col:
-        st.image(get_randy_avatar("idea"), width=290)
+        idea_path = ASSET_DIR / _Randy_ASSETS["idea"][0]
+        idea_image = load_cropped_randy_image(str(idea_path))
+        st.image(idea_image if idea_image is not None else get_randy_avatar("idea"), width=90)
     st.markdown("### 💡 예시 질문")
     columns = st.columns(3, gap="small")
     for index, (icon, question) in enumerate(EXAMPLE_QUESTIONS):
@@ -95,32 +122,41 @@ def render_user_message(content):
 
 
 def render_randy_message(content, sources=None, asset_dir=None):
-    avatar = get_randy_avatar("hello")
-    if asset_dir:
-        candidate = Path(asset_dir) / _Randy_ASSETS["hello"][0]
-        avatar = str(candidate) if candidate.exists() else _Randy_ASSETS["hello"][1]
-    if Path(avatar).exists() if isinstance(avatar, str) else False:
-        st.markdown('<div class="chatbot-answer-row"><img class="chatbot-randy-image" src="data:image/png;base64,' + __import__("base64").b64encode(Path(avatar).read_bytes()).decode("ascii") + '"><div class="chatbot-answer-card"><div class="randy-name">랜디 · LX 규정 도우미</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="chatbot-answer-row"><div class="chatbot-randy-image" style="font-size:3rem">{avatar}</div><div class="chatbot-answer-card"><div class="randy-name">랜디 · LX 규정 도우미</div>', unsafe_allow_html=True)
-    st.markdown(content, unsafe_allow_html=False)
-    if sources:
-        with st.expander("📚 참고한 규정"):
-            for source in sources:
-                st.write(source)
-    st.markdown('</div></div>', unsafe_allow_html=True)
+    current_asset_dir = Path(asset_dir) if asset_dir else ASSET_DIR
+    randy_path = current_asset_dir / _Randy_ASSETS["hello"][0]
+    randy_image = load_cropped_randy_image(str(randy_path))
+
+    _, conversation_col, _ = st.columns([0.6, 8.8, 0.6])
+    with conversation_col:
+        randy_col, answer_col = st.columns([1.15, 8.85], gap="medium", vertical_alignment="top")
+        with randy_col:
+            if randy_image is not None:
+                st.image(randy_image, width=92)
+            else:
+                st.markdown('<div style="font-size:3.5rem;text-align:center">🌱</div>', unsafe_allow_html=True)
+        with answer_col:
+            with st.container(border=True):
+                st.markdown('<div class="randy-name">랜디 · LX 규정 도우미</div>', unsafe_allow_html=True)
+                st.markdown(content)
+                if sources:
+                    with st.expander("📚 참고한 규정"):
+                        for source in sources:
+                            st.write(source)
 
 
-def render_randy_error(message="랜디가 답변을 준비하지 못했어요.\n\n잠시 후 다시 질문해 주세요.", error=None):
-    avatar = get_randy_avatar("error")
-    if isinstance(avatar, str) and Path(avatar).exists():
-        encoded = __import__("base64").b64encode(Path(avatar).read_bytes()).decode("ascii")
-        image = (
-            f'<img class="chatbot-randy-image" src="data:image/png;base64,{encoded}">'
-        )
-    else:
-        image = f'<div class="chatbot-randy-image" style="font-size:3rem">{avatar}</div>'
-    st.markdown(f'<div class="chatbot-answer-row">{image}<div class="chatbot-answer-card"><div class="chatbot-error">{message.replace(chr(10), "<br>")}</div></div></div>', unsafe_allow_html=True)
-    if error:
-        with st.expander("오류 상세 내용"):
-            st.exception(error)
+def render_randy_error(message="랜디가 답변을 준비하지 못했어요.\n\n잠시 후 다시 질문해 주세요.", error=None, asset_dir=None):
+    current_asset_dir = Path(asset_dir) if asset_dir else ASSET_DIR
+    error_path = current_asset_dir / _Randy_ASSETS["error"][0]
+    error_image = load_cropped_randy_image(str(error_path))
+    _, conversation_col, _ = st.columns([0.6, 8.8, 0.6])
+    with conversation_col:
+        randy_col, answer_col = st.columns([1.15, 8.85], gap="medium", vertical_alignment="top")
+        with randy_col:
+            st.image(error_image, width=92) if error_image is not None else st.markdown('<div style="font-size:3.5rem;text-align:center">⚠️</div>', unsafe_allow_html=True)
+        with answer_col:
+            with st.container(border=True):
+                st.markdown('<div class="randy-name">랜디 · LX 규정 도우미</div>', unsafe_allow_html=True)
+                st.error(message)
+                if error:
+                    with st.expander("오류 상세 내용"):
+                        st.exception(error)

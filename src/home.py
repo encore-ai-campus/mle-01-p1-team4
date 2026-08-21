@@ -14,11 +14,13 @@ RAW_PDF_DIR = PROJECT_ROOT / "data" / "raw"
 
 
 def get_frequent_tasks():
-    """Return the eight regulation documents used by the home cards."""
-    icons = ["🏖️", "💰", "🛡️", "✈️", "📈", "🧾", "🔐", "🗂️"]
     return [
-        {"icon": icon, "label": pdf["document_name"], **pdf}
-        for icon, pdf in zip(icons, get_regulation_pdfs())
+        {"icon": "🏖️", "label": "휴가 · 연차", "question": "연차휴가 사용 기준을 알려줘"},
+        {"icon": "💰", "label": "급여 · 수당", "question": "급여와 수당 지급 기준을 알려줘"},
+        {"icon": "✈️", "label": "출장 · 출장비", "question": "국내 출장 여비 지급 기준을 알려줘"},
+        {"icon": "📈", "label": "승진 · 인사", "question": "승진 관련 기준을 알려줘"},
+        {"icon": "🏠", "label": "휴직 · 복직", "question": "휴직과 복직 기준을 알려줘"},
+        {"icon": "🔐", "label": "보안 · 자료", "question": "사내 보안 관련 규정을 알려줘"},
     ]
 
 
