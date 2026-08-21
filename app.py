@@ -1,3 +1,4 @@
+import base64
 import sys
 from pathlib import Path
 
@@ -149,47 +150,48 @@ if st.session_state.next_page is not None:
 
     st.session_state.next_page = None
 
-# =========================================================
-# Sidebar
-# =========================================================
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap');
+:root { --green:#168b54; --dark:#15221f; --line:#dfe7e4; --soft:#f4f8f6; }
+html, body, [class*="css"] { font-family:'Noto Sans KR', sans-serif; }
+.stApp { background:#f6f8f7; color:var(--dark); }
+[data-testid="stSidebar"] { background:#f8fbfa; border-right:1px solid #e4ece9; }
+[data-testid="stSidebar"] section { padding:2rem 1rem; }
+.brand { text-align:center; padding:.3rem 0 1.8rem; }
+.brand-mark { color:var(--green); font-size:3.5rem; font-weight:800; letter-spacing:-.12em; line-height:1; }
+.brand-name { font-weight:800; font-size:1rem; margin-top:.7rem; }
+.brand-sub { color:var(--green); font-weight:700; margin-top:.25rem; }
+.hero { position:relative; padding:1.2rem 0 .5rem; min-height:190px; overflow:hidden; }
+.hero h1 { font-size:2rem; line-height:1.35; letter-spacing:-.06em; margin:1rem 0 .9rem; color:#111; }
+.hero h1 span { color:var(--green); }
+.hero p { color:#6b7774; margin:0; }
+.hero-mascot { position:absolute; right:2%; bottom:-10px; width:225px; max-height:205px; object-fit:contain; }
+.search-wrap { background:white; border:1px solid #d8e1dd; border-radius:14px; padding:.25rem; box-shadow:0 4px 18px rgba(17,48,39,.06); }
+.section-title { font-size:1.25rem; font-weight:800; letter-spacing:-.04em; margin:.25rem 0 .85rem; }
+.section-title span { color:var(--green); }
+.card { background:#fff; border:1px solid var(--line); border-radius:18px; padding:1.2rem 1.3rem; box-shadow:0 5px 18px rgba(17,48,39,.05); height:100%; }
+.card h3 { margin:0 0 .7rem; font-size:1.15rem; letter-spacing:-.04em; }
+.card-desc { color:#68736f; font-size:.9rem; margin-bottom:.8rem; }
+.pdf-card { min-height:112px; display:flex; flex-direction:column; justify-content:space-between; }
+.pdf-icon { font-size:1.65rem; }
+.pdf-name { font-weight:700; font-size:.92rem; line-height:1.35; }
+.rank-row { display:flex; align-items:center; gap:.7rem; padding:.65rem 0; border-bottom:1px solid #edf1ef; font-size:.9rem; }
+.rank-row:last-child { border-bottom:0; }
+.rank { width:25px; height:25px; display:grid; place-items:center; border-radius:50%; background:#e7f4ed; color:var(--green); font-weight:800; }
+.recent-row { padding:.55rem 0; border-bottom:1px solid #edf1ef; font-size:.9rem; }
+.recent-row:last-child { border-bottom:0; }
+@media (max-width: 900px) { .hero-mascot { opacity:.35; right:-35px; } .hero h1 { font-size:1.65rem; } }
+</style>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
-
-    logo_path = ASSET_DIR / "lx_logo.png"
-
-    if logo_path.exists():
-        st.image(
-            logo_path,
-            width=160,
-        )
-
-    st.title(
-        "LX AI 규정 도우미"
-    )
-
+    st.markdown('<div class="brand"><div class="brand-mark">LX</div><div class="brand-name">한국국토정보공사</div><div class="brand-sub">AI 규정 대시보드</div></div>', unsafe_allow_html=True)
+    page = st.radio("메뉴", ["🏠 홈", "💬 규정 챗봇", "📊 데이터 분석"], key="page", label_visibility="collapsed")
     st.divider()
-
-    page = st.radio(
-        "메뉴",
-        [
-            "🏠 홈",
-            "💬 규정 챗봇",
-            "📊 데이터 분석",
-        ],
-        key="page",
-        label_visibility="collapsed",
-    )
-
-    st.divider()
-
-    if st.button(
-        "🗑️ 대화 초기화",
-        use_container_width=True,
-    ):
-
+    if st.button("🗑️ 대화 초기화", use_container_width=True):
         st.session_state.messages = []
         st.session_state.pending_question = None
-
         st.rerun()
 
 
@@ -199,148 +201,35 @@ with st.sidebar:
 # =========================================================
 
 if page == "🏠 홈":
-
-    # =====================================================
-    # Header
-    # =====================================================
-
-    left, right = st.columns(
-        [3, 1],
-        vertical_alignment="center",
-    )
-
-    with left:
-
-        st.title(
-            "안녕하세요! 오늘도 규정 검색을 도와드릴게요. 👋"
-        )
-
-        st.caption(
-            "궁금한 규정이나 업무를 빠르게 찾아보세요."
-        )
-
-    with right:
-
-        mascot_path = ASSET_DIR / "mascot.png"
-
-        if mascot_path.exists():
-
-            st.image(
-                mascot_path,
-                width=170,
-            )
-
-
-    # =====================================================
-    # 검색
-    # =====================================================
-
-    search_col, button_col = st.columns(
-        [5, 1],
-        vertical_alignment="bottom",
-    )
-
+    mascot_path = ASSET_DIR / "Welcome 랜디.png"
+    mascot_src = ""
+    if mascot_path.exists():
+        mascot_src = "data:image/png;base64," + base64.b64encode(mascot_path.read_bytes()).decode("ascii")
+    st.markdown(f'<div class="hero"><h1>안녕하세요! 오늘도 <span>규정 검색</span>을 도와드릴게요.</h1><p>필요한 규정 원문을 빠르고 정확하게 찾아보세요.</p><img class="hero-mascot" src="{mascot_src}"></div>', unsafe_allow_html=True)
+    search_col, button_col = st.columns([5, 1], vertical_alignment="bottom")
     with search_col:
-
-        search_query = st.text_input(
-            "규정 검색",
-            placeholder="예: 휴직 중에도 직무급을 받을 수 있나요?",
-            label_visibility="collapsed",
-        )
-
+        search_query = st.text_input("규정 검색", placeholder="규정이나 업무를 검색해보세요", label_visibility="collapsed")
     with button_col:
-
-        search_clicked = st.button(
-            "🔍 검색",
-            use_container_width=True,
-        )
-
+        search_clicked = st.button("검색", use_container_width=True, type="primary")
     if search_clicked and search_query.strip():
-
-        move_to_chatbot(
-            search_query.strip()
-        )
-
-
-    # =====================================================
-    # 인기/빠른 검색어
-    # =====================================================
-
-    st.markdown(
-        "#### 🔥 빠른 검색"
-    )
-
-    popular_keyword = st.pills(
-        "빠른 검색",
-        [
-            "연차",
-            "출장비",
-            "직무급",
-            "승진",
-            "휴직",
-        ],
-        label_visibility="collapsed",
-    )
-
+        move_to_chatbot(search_query.strip())
+    popular_keyword = st.pills("인기 검색어", ["연차", "출장비", "초과근무수당", "승진", "휴직"], label_visibility="collapsed")
     if popular_keyword:
+        move_to_chatbot(f"{popular_keyword} 관련 규정을 알려줘")
 
-        move_to_chatbot(
-            f"{popular_keyword} 관련 규정을 알려줘"
-        )
-
-
-    st.divider()
-
-
-    # =====================================================
-    # 자주 찾는 업무
-    # =====================================================
-
-    st.subheader(
-        "⭐ 자주 찾는 업무"
-    )
-
+    st.markdown('<div class="section-title">🚀 <span>규정 원문</span> 바로가기</div>', unsafe_allow_html=True)
     try:
-
         tasks = get_frequent_tasks()
-
-    except Exception as e:
-
-        st.error(
-            "자주 찾는 업무 데이터를 불러오지 못했습니다."
-        )
-
-        st.exception(e)
-
+    except Exception:
         tasks = []
-
-
     if tasks:
-
-        task_cols = st.columns(3)
-
+        task_cols = st.columns(4)
         for index, task in enumerate(tasks):
-
-            col = task_cols[
-                index % 3
-            ]
-
-            with col:
-
-                clicked = st.button(
-                    f"{task['icon']} {task['label']}",
-                    key=f"task_{index}",
-                    use_container_width=True,
-                )
-
-                if clicked:
-
-                    move_to_chatbot(
-                        task["question"]
-                    )
-
-
-    st.divider()
+            with task_cols[index % 4]:
+                st.markdown(f'<div class="card pdf-card"><div class="pdf-icon">{task["icon"]}</div><div class="pdf-name">{task["label"]}</div></div>', unsafe_allow_html=True)
+                pdf_path = task["path"]
+                if pdf_path.exists():
+                    st.download_button("PDF 원문 다운로드", data=pdf_path.read_bytes(), file_name=pdf_path.name, mime="application/pdf", key=f"pdf_{index}", use_container_width=True)
 
 
     # =====================================================
@@ -355,10 +244,7 @@ if page == "🏠 홈":
     # =====================================================
 
     with left_col:
-
-        with st.container(
-            border=True
-        ):
+        with st.container(border=True):
 
             st.subheader(
                 "💡 추천 질문"
@@ -476,68 +362,6 @@ if page == "🏠 홈":
         st.info(
             "아직 질문 기록이 없습니다."
         )
-
-
-    # =====================================================
-    # PDF
-    # =====================================================
-
-    st.divider()
-
-    st.subheader(
-        "📚 규정 원문 바로가기"
-    )
-
-    try:
-
-        pdfs = get_regulation_pdfs()
-
-        if pdfs:
-
-            selected_pdf = st.selectbox(
-                "규정 선택",
-                pdfs,
-                format_func=lambda x:
-                    x["document_name"],
-            )
-
-            pdf_path = (
-                selected_pdf["path"]
-            )
-
-            if pdf_path.exists():
-
-                pdf_data = (
-                    pdf_path.read_bytes()
-                )
-
-                st.download_button(
-                    "📄 PDF 원문 다운로드",
-                    data=pdf_data,
-                    file_name=pdf_path.name,
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
-
-            else:
-
-                st.warning(
-                    "선택한 PDF 파일을 찾을 수 없습니다."
-                )
-
-        else:
-
-            st.info(
-                "등록된 규정 PDF가 없습니다."
-            )
-
-    except Exception as e:
-
-        st.error(
-            "PDF 목록을 불러오지 못했습니다."
-        )
-
-        st.exception(e)
 
 
 # =========================================================
