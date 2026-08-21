@@ -300,7 +300,6 @@ if page == "🏠 홈":
 
 elif page == "💬 규정 챗봇":
     inject_chatbot_css()
-    st.markdown('<div class="chatbot-page-title"><h1>사내 규정 AI 챗봇</h1><p class="chatbot-page-caption">사내 규정을 기반으로 필요한 기준과 근거 문서를 빠르게 찾아드려요.</p></div>', unsafe_allow_html=True)
     try:
         vector_store, retriever, chain = get_cached_rag()
     except Exception as e:

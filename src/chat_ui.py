@@ -23,9 +23,10 @@ def inject_chatbot_css():
     st.markdown(
         """
         <style>
+        section.main > div { padding-top:1rem !important; padding-bottom:6rem !important; }
         .chatbot-page { background:#F8F8F3; }
-        .chatbot-page-title { color:#1F3029; letter-spacing:-.04em; }
-        .chatbot-page-caption { color:#66736E; margin-bottom:1rem; }
+        .chatbot-page-title { color:#1F3029; letter-spacing:-.04em; margin-top:0; }
+        .chatbot-page-caption { color:#66736E; margin-bottom:.4rem; }
         .chatbot-guide { background:#F4FAF5; border:1px solid #DFE9E1; border-radius:16px; padding:1rem 1.1rem; min-height:135px; }
         .chatbot-guide h4 { margin:0 0 .45rem; color:#0B6B3A; }
         .chatbot-guide p { margin:.2rem 0; color:#66736E; font-size:.9rem; line-height:1.55; }
@@ -33,7 +34,7 @@ def inject_chatbot_css():
         .chatbot-error { background:#FFF7F5; border:1px solid #F2D8D2; border-radius:14px; padding:.9rem 1rem; color:#7A3228; }
         [data-testid="stChatMessage"] { border-radius:14px; }
         .chatbot-answer-row { display:flex; gap:18px; align-items:flex-start; max-width:980px; margin:.6rem auto 1.1rem; }
-        .chatbot-randy-image { width:76px; height:76px; object-fit:contain; flex:0 0 76px; }
+        .chatbot-randy-image { width:152px; height:152px; object-fit:contain; flex:0 0 152px; }
         .chatbot-answer-card { background:#F4FAF5; border:1px solid #D6E7D9; border-left:4px solid #159447; border-radius:0 14px 14px 14px; padding:1rem 1.2rem; color:#243B32; flex:1; }
         .randy-name { display:inline-block; color:#0B6B3A; background:#EDF7EF; border:1px solid #CFE4D3; border-radius:999px; padding:.25rem .65rem; font-size:.86rem; font-weight:700; margin-bottom:.8rem; }
         .chatbot-user-row { display:flex; justify-content:flex-end; max-width:980px; margin:.7rem auto; }
@@ -61,7 +62,7 @@ def render_chat_welcome():
         st.markdown('<h1 class="chatbot-page-title">💬 사내 규정 AI 챗봇</h1>', unsafe_allow_html=True)
         st.markdown('<p class="chatbot-page-caption">사내 규정을 기반으로 필요한 기준과 근거 문서를 빠르게 찾아드려요.</p>', unsafe_allow_html=True)
     with image_col:
-        st.image(get_randy_avatar("computer"), width=145)
+        st.image(get_randy_avatar("computer"), width=290)
 
     guide_left, guide_right = st.columns(2, gap="medium")
     with guide_left:
@@ -77,6 +78,9 @@ def render_chat_welcome():
 
 
 def render_example_questions():
+    idea_col, _ = st.columns([1, 4])
+    with idea_col:
+        st.image(get_randy_avatar("idea"), width=290)
     st.markdown("### 💡 예시 질문")
     columns = st.columns(3, gap="small")
     for index, (icon, question) in enumerate(EXAMPLE_QUESTIONS):
