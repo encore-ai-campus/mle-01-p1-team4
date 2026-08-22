@@ -86,31 +86,80 @@ if "next_page" not in st.session_state:
     st.session_state.next_page = None
 
 # =========================================================
+# Embedding Model Cache
+# =========================================================
+
+@st.cache_resource(
+    show_spinner=False
+)
+def get_cached_embedding_model():
+
+    return get_embeddings()
+
+
+# =========================================================
 # RAG Cache
 # =========================================================
 
-@st.cache_resource
+@st.cache_resource(
+    show_spinner=False
+)
 def get_cached_rag():
-    return initialize_rag()
+
+    embeddings = (
+        get_cached_embedding_model()
+    )
+
+    return initialize_rag(
+        embeddings=embeddings
+    )
 
 
 # =========================================================
-# 분석 Cache
+# Golden Set Cache
 # =========================================================
 
-@st.cache_data(show_spinner=False)
-def get_cached_golden_set(path_str):
+@st.cache_data(
+    show_spinner=False
+)
+def get_cached_golden_set(
+    path_str,
+):
+
     return load_golden_set(
         Path(path_str)
     )
 
 
-@st.cache_data(show_spinner=False)
-def get_cached_embeddings(df):
-    return embed_questions(df)
+# =========================================================
+# Golden Set Embedding Cache
+# =========================================================
+
+@st.cache_data(
+    show_spinner=False
+)
+def get_cached_embeddings(
+    path_str,
+    _embedding_model,
+):
+
+    df = get_cached_golden_set(
+        path_str
+    )
+
+    return embed_questions(
+        df,
+        _embedding_model,
+    )
 
 
-@st.cache_data(show_spinner=False)
+# =========================================================
+# Embedding Analysis Cache
+# =========================================================
+
+@st.cache_data(
+    show_spinner=False
+)
 def get_cached_embedding_analysis(
     df,
     embeddings,
@@ -118,34 +167,32 @@ def get_cached_embedding_analysis(
     n_neighbors,
     min_dist,
 ):
-    return build_embedding_analysis_from_embeddings(
-        df=df,
-        embeddings=embeddings,
-        n_clusters=n_clusters,
-        n_neighbors=n_neighbors,
-        min_dist=min_dist,
+
+    return (
+        build_embedding_analysis_from_embeddings(
+            df=df,
+            embeddings=embeddings,
+            n_clusters=n_clusters,
+            n_neighbors=n_neighbors,
+            min_dist=min_dist,
+        )
     )
 
 
-@st.cache_data(show_spinner=False)
-def get_cached_experiment_summary(path_str):
+# =========================================================
+# Experiment Summary Cache
+# =========================================================
+
+@st.cache_data(
+    show_spinner=False
+)
+def get_cached_experiment_summary(
+    path_str,
+):
+
     return load_experiment_summary(
         Path(path_str)
     )
-
-@st.cache_resource
-def get_cached_embedding_model():
-    return get_embeddings()
-
-@st.cache_resource
-def get_cached_rag():
-    embeddings = get_cached_embedding_model()
-    return initialize_rag(embeddings=embeddings)
-
-@st.cache_data(show_spinner=False)
-def get_cached_embeddings(path_str, _embedding_model):
-    df = get_cached_golden_set(path_str)
-    return embed_questions(df, _embedding_model)
 
 # =========================================================
 # 홈 → 챗봇 이동 함수
@@ -442,10 +489,13 @@ elif page == "📊 데이터 분석":
                 str(GOLDEN_SET_PATH)
             )
 
-            embeddings = (
-                get_cached_embeddings(
-                    df
-                )
+            embedding_model = (
+                get_cached_embedding_model()
+            )
+
+            embeddings = get_cached_embeddings(
+                str(GOLDEN_SET_PATH),
+                embedding_model,
             )
 
         except Exception as e:
