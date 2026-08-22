@@ -8,14 +8,24 @@ from ingest import (
     get_embeddings,
 )
 
-def load_vector_store(embeddings=None):
+def load_vector_store(
+    embeddings=None,
+):
+
     if embeddings is None:
         embeddings = get_embeddings()
+
     store = Chroma(
         collection_name=COLLECTION_NAME,
         embedding_function=embeddings,
-        persist_directory=CHROMA_PATH,
+        persist_directory=str(CHROMA_PATH),
     )
+
+    if store._collection.count() == 0:
+        raise RuntimeError(
+            "Chroma collection이 비어 있습니다."
+        )
+
     return store
 
 def get_retriever(

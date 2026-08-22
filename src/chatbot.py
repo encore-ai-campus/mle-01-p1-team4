@@ -5,6 +5,12 @@ from retriever import (
     expand_related_appendices,
 )
 
+from ingest import (
+    chroma_exists,
+    create_vector_store,
+    get_embeddings,
+)
+
 from rag_chain import create_rag_chain
 
 from query_rewriter import (
@@ -15,12 +21,58 @@ from query_rewriter import (
 from source import build_sources
 
 
-def initialize_rag(embeddings=None):
-    vector_store = load_vector_store(embeddings=embeddings)
-    retriever = get_retriever(store=vector_store, k=10)
-    chain = create_rag_chain()
-    return vector_store, retriever, chain
+# =========================================================
+# RAG 초기화
+# =========================================================
 
+def initialize_rag(
+    embeddings=None,
+):
+
+    if embeddings is None:
+        embeddings = get_embeddings()
+
+    # Chroma가 있으면 기존 DB 사용
+    if chroma_exists():
+
+        try:
+
+            vector_store = load_vector_store(
+                embeddings=embeddings,
+            )
+
+        except Exception:
+
+            # DB 파일이 깨졌거나 collection 문제가 있을 경우
+            # 다시 생성
+            vector_store = create_vector_store(
+                embeddings=embeddings,
+            )
+
+    # Chroma가 없으면 최초 생성
+    else:
+
+        vector_store = create_vector_store(
+            embeddings=embeddings,
+        )
+
+    retriever = get_retriever(
+        store=vector_store,
+        k=10,
+    )
+
+    chain = create_rag_chain()
+
+    return (
+        vector_store,
+        retriever,
+        chain,
+    )
+
+
+# =========================================================
+# 검색 질문 생성
+# =========================================================
 
 def make_search_question(
     question,
@@ -45,6 +97,10 @@ def make_search_question(
     return search_question
 
 
+# =========================================================
+# Document 검색
+# =========================================================
+
 def retrieve_documents(
     search_question,
     retriever,
@@ -62,6 +118,10 @@ def retrieve_documents(
 
     return documents
 
+
+# =========================================================
+# 답변 생성
+# =========================================================
 
 def generate_answer(
     question,
