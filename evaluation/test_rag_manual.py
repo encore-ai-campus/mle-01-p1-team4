@@ -1,6 +1,6 @@
 import pandas as pd
 
-from retriever import retrieve_context
+from rag.retriever import retrieve_context
 from rag_chain import create_rag_chain
 from source import build_sources
 

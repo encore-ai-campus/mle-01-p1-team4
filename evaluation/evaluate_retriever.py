@@ -2,7 +2,7 @@ import pandas as pd
 import pandas as pd
 from pathlib import Path
 
-from retriever import (
+from src.rag.retriever import (
     load_vector_store,
     get_retriever,
 )

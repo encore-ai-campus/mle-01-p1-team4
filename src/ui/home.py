@@ -1,11 +1,4 @@
-from pathlib import Path
-
-# =========================================================
-# 경로
-# =========================================================
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-RAW_PDF_DIR = PROJECT_ROOT / "data" / "raw"
+from src.config import RAW_DIR
 
 
 # =========================================================
@@ -100,11 +93,11 @@ def get_regulation_pdfs():
     pdfs = []
 
     # data/raw 폴더가 없으면 빈 리스트 반환
-    if not RAW_PDF_DIR.exists():
+    if not RAW_DIR.exists():
         return pdfs
 
     for pdf_path in sorted(
-        RAW_PDF_DIR.glob("*.pdf")
+        RAW_DIR.glob("*.pdf")
     ):
         pdfs.append(
             {

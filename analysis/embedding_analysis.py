@@ -1,19 +1,12 @@
-from pathlib import Path
 import re
 
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 from sklearn.cluster import KMeans
 from umap import UMAP
 
-from ingest import get_embeddings
+from src.rag.ingest import get_embeddings
 
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-EVALUATION_DIR = PROJECT_ROOT / "evaluation"
-RESULT_DIR = EVALUATION_DIR / "results"
 
 DOCUMENT_TOPICS = {
     "급여규정": "급여·수당",
