@@ -2,11 +2,12 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 import re
 
-from ingest import (
+from src.config import (
     CHROMA_PATH,
     COLLECTION_NAME,
-    get_embeddings,
 )
+
+from src.rag.ingest import get_embeddings
 
 def load_vector_store(
     embeddings=None,

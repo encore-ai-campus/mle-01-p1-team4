@@ -1,36 +1,21 @@
 import base64
-import sys
-from pathlib import Path
 
 import streamlit as st
 
+from src.config import ASSET_DIR
 
-# =========================================================
-# 프로젝트 경로
-# =========================================================
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-SRC_DIR = PROJECT_ROOT / "src"
-
-sys.path.append(str(SRC_DIR))
-
-
-# =========================================================
-# 프로젝트 모듈
-# =========================================================
-
-from home import (
+from src.ui.home import (
     get_frequent_tasks,
     get_recommended_questions,
     get_department_info,
 )
 
-from chatbot import (
+from src.rag.chatbot import (
     initialize_rag,
     generate_answer,
 )
 
-from chat_ui import (
+from src.ui.chat_ui import (
     inject_chatbot_css,
     render_chat_welcome,
     render_example_questions,
@@ -39,8 +24,9 @@ from chat_ui import (
     render_randy_error,
 )
 
-from ingest import get_embeddings
-
+from src.rag.ingest import (
+    get_embeddings,
+)
 
 # =========================================================
 # Streamlit 기본 설정
@@ -54,11 +40,6 @@ st.set_page_config(
 )
 
 
-# =========================================================
-# Assets 경로
-# =========================================================
-
-ASSET_DIR = PROJECT_ROOT / "src" / "assets"
 
 
 # =========================================================

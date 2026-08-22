@@ -1,35 +1,15 @@
 import json
-from pathlib import Path
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 
-
-# =========================================================
-# 경로 설정
-# =========================================================
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-JSON_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "processed"
-    / "llama_parsed"
-    / "전체_문서_chunks_normalized.json"
+from src.config import (
+    NORMALIZED_CHUNKS_PATH,
+    CHROMA_PATH,
+    COLLECTION_NAME,
+    EMBEDDING_MODEL,
 )
-
-CHROMA_PATH = (
-    PROJECT_ROOT
-    / "chroma"
-    / "ko-sroberta"
-)
-
-COLLECTION_NAME = "company_regulations"
-
-EMBEDDING_MODEL = "jhgan/ko-sroberta-multitask"
-
 
 # =========================================================
 # Chunk JSON 로드
@@ -37,17 +17,23 @@ EMBEDDING_MODEL = "jhgan/ko-sroberta-multitask"
 
 def load_chunks() -> list[dict]:
 
-    if not JSON_PATH.exists():
+    if not NORMALIZED_CHUNKS_PATH.exists():
         raise FileNotFoundError(
-            f"정규화 Chunk JSON을 찾을 수 없습니다: {JSON_PATH}"
+            "정규화 Chunk JSON을 찾을 수 없습니다: "
+            f"{NORMALIZED_CHUNKS_PATH}"
         )
 
-    with JSON_PATH.open(
-        "r",
-        encoding="utf-8",
-    ) as f:
+    try:
+        with NORMALIZED_CHUNKS_PATH.open(
+            "r",
+            encoding="utf-8",
+        ) as f:
+            chunks = json.load(f)
 
-        chunks = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            "Chunk JSON 형식이 올바르지 않습니다."
+        ) from exc
 
     return chunks
 
@@ -160,6 +146,9 @@ def create_vector_store(
         collection_name=COLLECTION_NAME,
         ids=ids,
         persist_directory=str(CHROMA_PATH),
+        collection_metadata={
+            "hnsw:space": "cosine",
+        },
     )
 
     return store

@@ -3,8 +3,8 @@ from pathlib import Path
 from PIL import Image, ImageChops
 import streamlit as st
 
+from src.config import ASSET_DIR
 
-ASSET_DIR = Path(__file__).resolve().parent / "assets"
 
 _Randy_ASSETS = {
     "computer": ("컴퓨터하는 랜디.png", "🤖"),

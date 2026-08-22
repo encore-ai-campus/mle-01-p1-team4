@@ -1,10 +1,4 @@
-from pathlib import Path
-import sys
-
-SRC_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(SRC_DIR))
-
-from legal_chunking import (
+from src.preprocessing.legal_chunking import (
     normalize_html_table,
     postprocess_chunks,
     split_chunk_on_appendices,
