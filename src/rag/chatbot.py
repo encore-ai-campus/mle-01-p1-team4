@@ -167,14 +167,45 @@ def generate_answer(
         [],
     )
 
-    sources = build_sources(
-        documents=documents,
-        used_chunk_ids=used_chunk_ids,
+    raw_followups = response.get(
+        "followup_questions",
+        [],
     )
+
+    followup_questions = []
+
+    if isinstance(raw_followups, list):
+
+        normalized_question = question.strip()
+
+        for followup in raw_followups:
+
+            if not isinstance(followup, str):
+                continue
+
+            followup = followup.strip()
+
+            if (
+                not followup
+                or followup == normalized_question
+                or followup in followup_questions
+            ):
+                continue
+
+            followup_questions.append(followup)
+
+            if len(followup_questions) == 2:
+                break
+
+        sources = build_sources(
+            documents=documents,
+            used_chunk_ids=used_chunk_ids,
+        )
 
     return {
         "answer": answer,
         "sources": sources,
         "documents": documents,
         "search_question": search_question,
+        "followup_questions": followup_questions,
     }

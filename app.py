@@ -944,6 +944,11 @@ elif page == "💬 규정 챗봇":
                     [],
                 )
 
+                followup_questions = result.get(
+                    "followup_questions",
+                    [],
+                )
+
                 if (
                     not answer
                     or not str(answer).strip()
@@ -959,6 +964,7 @@ elif page == "💬 규정 챗봇":
                         "role": "assistant",
                         "content": answer,
                         "sources": sources,
+                        "followup_questions": followup_questions,
                     }
                 )
 
@@ -989,9 +995,9 @@ elif page == "💬 규정 챗봇":
             st.columns(2)
         )
 
-        followups = (
-            "연차 신청 절차도 알려줘",
-            "휴가 종류를 비교해줘",
+        followups = st.session_state.messages[-1].get(
+            "followup_questions",
+            [],
         )
 
         for (

@@ -60,7 +60,7 @@ def inject_chatbot_css():
         .chatbot-page { background:#F8F8F3; }
         .chatbot-page-title { color:#1F3029; letter-spacing:-.04em; margin:0 0 1.1rem; font-size:2rem; font-weight:800; }
         .chatbot-page-caption { color:#66736E; margin-bottom:.4rem; }
-        .chatbot-guide { background:#F4FAF5; border:1px solid #DFE9E1; border-radius:16px; padding:1rem 1.1rem; min-height:135px; }
+        .chatbot-guide { width:100%; height:155px; box-sizing:border-box; background:#F4FAF5; border:1px solid #DFE9E1; border-radius:16px; padding:1rem 1.1rem;}
         .chatbot-guide h4 { margin:0 0 .45rem; color:#0B6B3A; }
         .chatbot-guide p { margin:.2rem 0; color:#66736E; font-size:.9rem; line-height:1.55; }
         .chatbot-brand { color:#0B6B3A; font-size:.78rem; font-weight:700; margin-bottom:.25rem; }
@@ -101,19 +101,52 @@ def render_chat_welcome():
             unsafe_allow_html=True,
         )
 
-
 def render_example_questions():
-    idea_col, _ = st.columns([1, 4])
-    with idea_col:
-        idea_path = ASSET_DIR / _Randy_ASSETS["idea"][0]
-        idea_image = load_cropped_randy_image(str(idea_path))
-        st.image(idea_image if idea_image is not None else get_randy_avatar("idea"), width=90)
-    st.markdown("### 💡 예시 질문")
-    columns = st.columns(3, gap="small")
-    for index, (icon, question) in enumerate(EXAMPLE_QUESTIONS):
+    # 마스코트와 제목만 같은 줄에 배치
+    mascot_col, title_col, _ = st.columns(
+        [0.7, 2.3, 7],
+        gap="small",
+        vertical_alignment="center",
+    )
+    with mascot_col:
+        idea_path = (
+            ASSET_DIR
+            / _Randy_ASSETS["idea"][0]
+        )
+        idea_image = load_cropped_randy_image(
+            str(idea_path)
+        )
+        st.image(
+            (
+                idea_image
+                if idea_image is not None
+                else get_randy_avatar("idea")
+            ),
+            width=90,
+        )
+
+    with title_col:
+        st.markdown("### 💡 예시 질문")
+
+    # 중요: 여기부터는 with title_col 밖이어야 함
+    # 그래야 전체 화면 너비를 사용함
+    columns = st.columns(
+        3,
+        gap="small",
+    )
+    for index, (
+        icon,
+        question,
+    ) in enumerate(EXAMPLE_QUESTIONS):
         with columns[index % 3]:
-            if st.button(f"{icon}  {question}", key=f"example_question_{index}", use_container_width=True):
-                st.session_state.pending_question = question
+            if st.button(
+                f"{icon}  {question}",
+                key=f"example_question_{index}",
+                use_container_width=True,
+            ):
+                st.session_state.pending_question = (
+                    question
+                )
                 st.rerun()
 
 
