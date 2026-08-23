@@ -197,10 +197,10 @@ def generate_answer(
             if len(followup_questions) == 2:
                 break
 
-        sources = build_sources(
-            documents=documents,
-            used_chunk_ids=used_chunk_ids,
-        )
+    sources = build_sources(
+        documents=documents,
+        used_chunk_ids=used_chunk_ids,
+    )
 
     return {
         "answer": answer,
