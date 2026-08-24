@@ -1,4 +1,5 @@
 import base64
+import random
 
 import streamlit as st
 
@@ -780,6 +781,7 @@ elif page == "💬 규정 챗봇":
                 message["content"],
                 message.get("sources"),
                 ASSET_DIR,
+                message.get("randy_kind", "hello"),
             )
 
         else:
@@ -831,12 +833,42 @@ elif page == "💬 규정 챗봇":
 
                     raise ValueError("응답에 answer가 없습니다.")
 
+                randy_candidates = [
+                    "hello",
+                    "computer",
+                    "idea",
+                    "talk_4",
+                    "talk_5",
+                ]
+
+                previous_randy = next(
+                    (
+                        message.get("randy_kind")
+                        for message in reversed(
+                            st.session_state.messages
+                        )
+                        if message["role"] == "assistant"
+                    ),
+                    None,
+                )
+
+                available_candidates = [
+                    kind
+                    for kind in randy_candidates
+                    if kind != previous_randy
+                ]
+
+                selected_randy = random.choice(
+                    available_candidates
+                )
+
                 st.session_state.messages.append(
                     {
                         "role": "assistant",
                         "content": answer,
                         "sources": sources,
                         "followup_questions": followup_questions,
+                        "randy_kind": selected_randy,
                     }
                 )
 

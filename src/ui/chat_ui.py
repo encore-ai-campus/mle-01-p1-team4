@@ -11,6 +11,10 @@ _Randy_ASSETS = {
     "hello": ("안녕~ 랜디.png", "🌱"),
     "idea": ("아이디어 랜디.png", "💡"),
     "error": ("NO하는 랜디.png", "⚠️"),
+
+    # 새로 추가하는 사진만 별도 키 사용
+    "talk_4": ("천사 랜디.png", "😊"),
+    "talk_5": ("돋보기 랜디.png", "📚"),
 }
 
 
@@ -154,9 +158,9 @@ def render_user_message(content):
     st.markdown(f'<div class="chatbot-user-row"><div class="chatbot-user-card">🧑‍💼&nbsp;&nbsp;{content}</div></div>', unsafe_allow_html=True)
 
 
-def render_randy_message(content, sources=None, asset_dir=None):
+def render_randy_message(content, sources=None, asset_dir=None, randy_kind="hello"):
     current_asset_dir = Path(asset_dir) if asset_dir else ASSET_DIR
-    randy_path = current_asset_dir / _Randy_ASSETS["hello"][0]
+    randy_path = current_asset_dir / _Randy_ASSETS.get(randy_kind,_Randy_ASSETS["hello"])[0]
     randy_image = load_cropped_randy_image(str(randy_path))
 
     _, conversation_col, _ = st.columns([0.6, 8.8, 0.6])
