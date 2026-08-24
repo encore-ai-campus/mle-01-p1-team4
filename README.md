@@ -21,13 +21,27 @@ RAG 챗봇이 근거 규정과 출처를 함께 제공하고, 원문 조회·담
 
 ## 2. 데모
 
-| 홈 화면 1 | 홈 화면 2 |
-| --- | --- |
-| ![home1](data/images/home1.png) | ![home2](data/images/home2.png) |
+### 홈 화면 1
 
-| 챗봇 화면 1 | 챗봇 화면 2 |
-| --- | --- |
-| ![chatbot1](data/images/chatbot1.png) | ![chatbot2](data/images/chatbot2.png) |
+![home1](data/images/home1.png)
+
+---
+
+### 홈 화면 2
+
+![home2](data/images/home2.png)
+
+---
+
+### 챗봇 화면 1
+
+![chatbot1](data/images/chatbot1.png)
+
+---
+
+### 챗봇 화면 2
+
+![chatbot2](data/images/chatbot2.png)
 
 ## 3. 주요 기능
 
