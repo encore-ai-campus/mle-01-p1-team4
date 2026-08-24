@@ -198,8 +198,25 @@ body,
 [data-testid="stSidebar"] {
     background:#f8fbfa;
     border-right:1px solid #e4ece9;
-    min-width:16vw;
-    max-width:16vw;
+    transition:
+        width .25s ease,
+        min-width .25s ease,
+        max-width .25s ease;
+}
+
+/* 사이드바가 열려 있을 때만 16vw */
+[data-testid="stSidebar"][aria-expanded="true"] {
+    width:16vw !important;
+    min-width:16vw !important;
+    max-width:16vw !important;
+}
+
+/* 사이드바를 접으면 공간도 같이 제거 */
+[data-testid="stSidebar"][aria-expanded="false"] {
+    width:0 !important;
+    min-width:0 !important;
+    max-width:0 !important;
+    border-right:0 !important;
 }
 
 [data-testid="stSidebar"] section {
@@ -532,6 +549,24 @@ button[aria-pressed="true"] {
     background:#f3f8f5;
 }
 
+/* ==================================================
+   Sidebar 접힘 → Main 영역 확장
+================================================== */
+
+body:has(
+    [data-testid="stSidebar"][aria-expanded="false"]
+)
+[data-testid="stMainBlockContainer"] {
+    max-width:100% !important;
+    width:100% !important;
+
+    padding-left:2.5rem !important;
+    padding-right:2.5rem !important;
+
+    transition:
+        max-width .25s ease,
+        padding .25s ease;
+}
 
 /* ==================================================
    모바일
