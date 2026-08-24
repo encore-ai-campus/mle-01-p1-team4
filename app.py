@@ -5,7 +5,6 @@ import streamlit as st
 from src.config import ASSET_DIR
 
 from src.ui.home import (
-    get_frequent_tasks,
     get_recommended_questions,
     get_department_info,
 )
@@ -209,7 +208,7 @@ st.markdown(
     .hero {
         position:relative;
         padding:1.2rem 0 .5rem;
-        min-height:190px;
+        min-height:210px;
         overflow:hidden;
     }
 
@@ -233,7 +232,7 @@ st.markdown(
     .hero-mascot {
         position:absolute;
         right:2%;
-        bottom:-10px;
+        bottom:15px;
         width:225px;
         max-height:205px;
         object-fit:contain;
@@ -255,18 +254,7 @@ st.markdown(
         box-shadow:0 3px 8px rgba(17,48,39,.04);
     }
 
-    .speech:after {
-        content:"";
-        position:absolute;
-        right:18px;
-        bottom:-12px;
-        width:18px;
-        height:18px;
-        background:#fff;
-        border-right:2px solid var(--green);
-        border-bottom:2px solid var(--green);
-        transform:rotate(35deg);
-    }
+    .speech:after { content:""; position:absolute; left:18px; right:auto; bottom:-12px; width:18px; height:18px; background:#fff; border-left:2px solid var(--green); border-bottom:2px solid var(--green); transform:rotate(-35deg); }
 
     .search-wrap {
         background:white;
@@ -559,13 +547,9 @@ if page == "🏠 홈":
     # -----------------------------------------------------
 
     try:
-
-        tasks = get_frequent_tasks()
-
+        pdfs = get_regulation_pdfs()
     except Exception:
-
-        tasks = []
-
+        pdfs = []
 
     upper_left, upper_right = st.columns(
         2,
@@ -578,39 +562,36 @@ if page == "🏠 홈":
     )
 
 
-    with upper_left:
+with upper_left:
+    with st.container(border=True):
+        st.markdown("### 📚 규정 PDF 원문")
 
-        with st.container(border=True):
+        st.caption(
+            "원문이 필요한 규정을 바로 열어 확인할 수 있습니다."
+        )
 
-            st.markdown(
-                "### 🚀 자주 찾는 업무"
-            )
-
-            st.caption(
-                "필요한 업무를 빠르게 확인해보세요."
-            )
-
-            task_cols = st.columns(
-                3,
+        if pdfs:
+            pdf_cols = st.columns(
+                2,
                 gap="small",
             )
 
-            for index, task in enumerate(
-                tasks[:6]
-            ):
+            for index, pdf in enumerate(pdfs):
+                pdf_path = pdf["path"]
 
-                with task_cols[index % 3]:
-
-                    if st.button(
-                        f'{task["icon"]}  '
-                        f'{task["label"]}',
-                        key=f"task_{index}",
-                        use_container_width=True,
-                    ):
-
-                        move_to_chatbot(
-                            task["question"]
+                with pdf_cols[index % 2]:
+                    if pdf_path.exists():
+                        st.download_button(
+                            label=f'📄 {pdf["document_name"]}',
+                            data=pdf_path.read_bytes(),
+                            file_name=pdf_path.name,
+                            mime="application/pdf",
+                            key=f"pdf_{index}",
+                            use_container_width=True,
                         )
+
+        else:
+            st.info("표시할 규정 PDF가 없습니다.")
 
 
     # -----------------------------------------------------
@@ -673,49 +654,6 @@ if page == "🏠 홈":
                         )
 
 
-    # -----------------------------------------------------
-    # 최근 질문
-    # -----------------------------------------------------
-
-    with lower_left:
-
-        with st.container(border=True):
-
-            st.markdown(
-                "### 🕘 나의 최근 질문"
-            )
-
-            user_messages = [
-                message["content"]
-                for message
-                in st.session_state.messages
-                if message["role"] == "user"
-            ]
-
-            if user_messages:
-
-                for (
-                    index,
-                    recent_question,
-                ) in enumerate(
-                    user_messages[-5:][::-1]
-                ):
-
-                    if st.button(
-                        f"•  {recent_question}",
-                        key=f"recent_{index}",
-                        use_container_width=True,
-                    ):
-
-                        move_to_chatbot(
-                            recent_question
-                        )
-
-            else:
-
-                st.info(
-                    "아직 질문 기록이 없습니다."
-                )
 
 
     # -----------------------------------------------------
