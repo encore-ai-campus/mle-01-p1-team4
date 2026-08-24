@@ -21,16 +21,13 @@ RAG 챗봇이 근거 규정과 출처를 함께 제공하고, 원문 조회·담
 
 ## 2. 데모
 
-| 홈 | 분석 대시보드 1 |
+| 홈 화면 1 | 홈 화면 2 |
 | --- | --- |
-| ![home](docs/images/home1.png) | ![dashboard1](docs/images/home2.png) |
+| ![home1](data/images/home1.png) | ![home2](data/images/home2.png) |
 
-| 분석 대시보드 2 | RAG 규정 챗봇 |
-| ![dashboard2](docs/images/chatbot1.png) | ![chatbot](docs/images/chatbot2.png) |
-
-| 데이터 분석 |
-| --- |
-| ![analysis](docs/images/analysis.png) |
+| 챗봇 화면 1 | 챗봇 화면 2 |
+| --- | --- |
+| ![chatbot1](data/images/chatbot1.png) | ![chatbot2](data/images/chatbot2.png) |
 
 ## 3. 주요 기능
 
