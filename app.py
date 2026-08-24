@@ -7,6 +7,8 @@ from src.config import ASSET_DIR
 from src.ui.home import (
     get_recommended_questions,
     get_department_info,
+    get_regulation_pdfs,
+    render_travel_expense,
 )
 
 from src.rag.chatbot import (
@@ -39,8 +41,6 @@ st.set_page_config(
 )
 
 
-
-
 # =========================================================
 # Session State
 # =========================================================
@@ -65,6 +65,7 @@ if "next_page" not in st.session_state:
 # Streamlit 프로세스당 한 번만 생성한다.
 # =========================================================
 
+
 @st.cache_resource(show_spinner=False)
 def get_cached_embedding_model():
 
@@ -82,19 +83,19 @@ def get_cached_embedding_model():
 # 전체를 한 번 초기화하고 재사용한다.
 # =========================================================
 
+
 @st.cache_resource(show_spinner=False)
 def get_cached_rag():
 
     embeddings = get_cached_embedding_model()
 
-    return initialize_rag(
-        embeddings=embeddings
-    )
+    return initialize_rag(embeddings=embeddings)
 
 
 # =========================================================
 # 홈 → 챗봇 이동
 # =========================================================
+
 
 def move_to_chatbot(question):
 
@@ -110,9 +111,7 @@ def move_to_chatbot(question):
 
 if st.session_state.next_page is not None:
 
-    st.session_state.page = (
-        st.session_state.next_page
-    )
+    st.session_state.page = st.session_state.next_page
 
     st.session_state.next_page = None
 
@@ -240,7 +239,7 @@ st.markdown(
 
     .speech {
         position:absolute;
-        right:18%;
+        right:22%;
         top:1rem;
         z-index:1;
         padding:.75rem 1.1rem;
@@ -254,7 +253,23 @@ st.markdown(
         box-shadow:0 3px 8px rgba(17,48,39,.04);
     }
 
-    .speech:after { content:""; position:absolute; left:18px; right:auto; bottom:-12px; width:18px; height:18px; background:#fff; border-left:2px solid var(--green); border-bottom:2px solid var(--green); transform:rotate(-35deg); }
+    .speech:after {
+    content:"";
+    position:absolute;
+
+    right:-13px;
+    bottom:18px;
+
+    width:24px;
+    height:24px;
+
+    background:#fff;
+
+    border-right:2px solid var(--green);
+    border-bottom:2px solid var(--green);
+
+    transform:rotate(-45deg);
+    }
 
     .search-wrap {
         background:white;
@@ -455,34 +470,27 @@ if page == "🏠 홈":
     # Hero
     # -----------------------------------------------------
 
-    mascot_path = (
-        ASSET_DIR
-        / "Welcome 랜디.png"
-    )
+    mascot_path = ASSET_DIR / "Welcome 랜디.png"
 
     mascot_src = ""
 
     if mascot_path.exists():
 
-        mascot_src = (
-            "data:image/png;base64,"
-            + base64.b64encode(
-                mascot_path.read_bytes()
-            ).decode("ascii")
-        )
+        mascot_src = "data:image/png;base64," + base64.b64encode(
+            mascot_path.read_bytes()
+        ).decode("ascii")
 
     st.markdown(
-        f'''
+        f"""
     <div class="hero">
         <h1>안녕하세요! 오늘도 <span>규정 검색</span>을 도와드릴게요.</h1>
         <p>궁금한 규정이나 업무를 빠르게 찾아보세요.</p>
         <div class="speech">궁금한 규정이나<br>업무를 검색해보세요!</div>
         <img class="hero-mascot" src="{mascot_src}">
     </div>
-    ''',
+    """,
         unsafe_allow_html=True,
     )
-
 
     # -----------------------------------------------------
     # 검색창
@@ -509,15 +517,9 @@ if page == "🏠 홈":
             type="primary",
         )
 
-    if (
-        search_clicked
-        and search_query.strip()
-    ):
+    if search_clicked and search_query.strip():
 
-        move_to_chatbot(
-            search_query.strip()
-        )
-
+        move_to_chatbot(search_query.strip())
 
     # -----------------------------------------------------
     # 빠른 검색
@@ -537,10 +539,7 @@ if page == "🏠 홈":
 
     if popular_keyword:
 
-        move_to_chatbot(
-            f"{popular_keyword} 관련 규정을 알려줘"
-        )
-
+        move_to_chatbot(f"{popular_keyword} 관련 규정을 알려줘")
 
     # -----------------------------------------------------
     # 자주 찾는 업무
@@ -548,9 +547,9 @@ if page == "🏠 홈":
 
     try:
         pdfs = get_regulation_pdfs()
-    except Exception:
+    except Exception as e:
+        st.error(f"PDF 목록을 불러오지 못했습니다: {e}")
         pdfs = []
-
     upper_left, upper_right = st.columns(
         2,
         gap="medium",
@@ -561,38 +560,34 @@ if page == "🏠 홈":
         gap="medium",
     )
 
+    with upper_left:
+        with st.container(border=True):
+            st.markdown("### 📚 규정 PDF 원문")
 
-with upper_left:
-    with st.container(border=True):
-        st.markdown("### 📚 규정 PDF 원문")
+            st.caption("원문이 필요한 규정을 바로 열어 확인할 수 있습니다.")
 
-        st.caption(
-            "원문이 필요한 규정을 바로 열어 확인할 수 있습니다."
-        )
+            if pdfs:
+                pdf_cols = st.columns(
+                    2,
+                    gap="small",
+                )
 
-        if pdfs:
-            pdf_cols = st.columns(
-                2,
-                gap="small",
-            )
+                for index, pdf in enumerate(pdfs):
+                    pdf_path = pdf["path"]
 
-            for index, pdf in enumerate(pdfs):
-                pdf_path = pdf["path"]
+                    with pdf_cols[index % 2]:
+                        if pdf_path.exists():
+                            st.download_button(
+                                label=f'📄 {pdf["document_name"]}',
+                                data=pdf_path.read_bytes(),
+                                file_name=pdf_path.name,
+                                mime="application/pdf",
+                                key=f"pdf_{index}",
+                                use_container_width=True,
+                            )
 
-                with pdf_cols[index % 2]:
-                    if pdf_path.exists():
-                        st.download_button(
-                            label=f'📄 {pdf["document_name"]}',
-                            data=pdf_path.read_bytes(),
-                            file_name=pdf_path.name,
-                            mime="application/pdf",
-                            key=f"pdf_{index}",
-                            use_container_width=True,
-                        )
-
-        else:
-            st.info("표시할 규정 PDF가 없습니다.")
-
+            else:
+                st.info("표시할 규정 PDF가 없습니다.")
 
     # -----------------------------------------------------
     # 추천 질문
@@ -602,28 +597,19 @@ with upper_left:
 
         with st.container(border=True):
 
-            st.markdown(
-                "### 💡 추천 질문"
-            )
+            st.markdown("### 💡 추천 질문")
 
-            st.caption(
-                "자주 확인하는 규정을 "
-                "빠르게 찾아보세요."
-            )
+            st.caption("자주 확인하는 규정을 " "빠르게 찾아보세요.")
 
             try:
 
-                questions = (
-                    get_recommended_questions()
-                )
+                questions = get_recommended_questions()
 
             except Exception:
 
                 questions = []
 
-            for index, question in enumerate(
-                questions[:5]
-            ):
+            for index, question in enumerate(questions[:5]):
 
                 q_col, b_col = st.columns(
                     [1, 12],
@@ -649,12 +635,7 @@ with upper_left:
                         use_container_width=True,
                     ):
 
-                        move_to_chatbot(
-                            question
-                        )
-
-
-
+                        move_to_chatbot(question)
 
     # -----------------------------------------------------
     # 담당 부서
@@ -664,20 +645,13 @@ with upper_left:
 
         with st.container(border=True):
 
-            st.markdown(
-                "### ☎ 담당 부서 안내"
-            )
+            st.markdown("### ☎ 담당 부서 안내")
 
-            st.caption(
-                "규정만으로 해결되지 않는 경우, "
-                "담당 부서에 문의해 주세요."
-            )
+            st.caption("규정만으로 해결되지 않는 경우, " "담당 부서에 문의해 주세요.")
 
             try:
 
-                departments = (
-                    get_department_info()
-                )
+                departments = get_department_info()
 
                 headers = [
                     "업무 분야",
@@ -686,30 +660,19 @@ with upper_left:
                 ]
 
                 rows = "".join(
-
                     "<tr>"
                     + "".join(
-                        f"<td>"
-                        f"{item.get(header, '')}"
-                        f"</td>"
-                        for header
-                        in headers
+                        f"<td>" f"{item.get(header, '')}" f"</td>" for header in headers
                     )
                     + "</tr>"
-
-                    for item
-                    in departments
+                    for item in departments
                 )
 
                 table = (
                     "<table class='department-table'>"
                     "<thead>"
                     "<tr>"
-                    + "".join(
-                        f"<th>{header}</th>"
-                        for header
-                        in headers
-                    )
+                    + "".join(f"<th>{header}</th>" for header in headers)
                     + "</tr>"
                     "</thead>"
                     f"<tbody>{rows}</tbody>"
@@ -723,9 +686,14 @@ with upper_left:
 
             except Exception:
 
-                st.info(
-                    "담당 부서 정보가 없습니다."
-                )
+                st.info("담당 부서 정보가 없습니다.")
+
+
+    # -----------------------------------------------------
+    # 출장 여비 간편 계산
+    # -----------------------------------------------------
+
+    render_travel_expense()
 
 
 # =========================================================
@@ -746,7 +714,6 @@ elif page == "💬 규정 챗봇":
         unsafe_allow_html=True,
     )
 
-
     # =====================================================
     # RAG 초기화
     #
@@ -756,9 +723,7 @@ elif page == "💬 규정 챗봇":
 
     try:
 
-        vector_store, retriever, chain = (
-            get_cached_rag()
-        )
+        vector_store, retriever, chain = get_cached_rag()
 
     except Exception as e:
 
@@ -773,22 +738,16 @@ elif page == "💬 규정 챗봇":
 
         st.stop()
 
-
     # =====================================================
     # 질문 입력
     # =====================================================
 
     typed_question = st.chat_input(
-        (
-            "예: 시간단위 연차 사용 기준은 "
-            "어떻게 되나요?"
-        ),
+        ("예: 시간단위 연차 사용 기준은 " "어떻게 되나요?"),
         key="chatbot_question_input",
     )
 
-    pending_question = (
-        st.session_state.pending_question
-    )
+    pending_question = st.session_state.pending_question
 
     if pending_question:
 
@@ -800,27 +759,20 @@ elif page == "💬 규정 챗봇":
 
         question = typed_question
 
-
     # =====================================================
     # 최초 안내 화면
     # =====================================================
 
-    if (
-        not st.session_state.messages
-        and not question
-    ):
+    if not st.session_state.messages and not question:
 
         render_chat_welcome()
         render_example_questions()
-
 
     # =====================================================
     # 기존 대화 출력
     # =====================================================
 
-    for message in (
-        st.session_state.messages
-    ):
+    for message in st.session_state.messages:
 
         if message["role"] == "assistant":
 
@@ -832,10 +784,7 @@ elif page == "💬 규정 챗봇":
 
         else:
 
-            render_user_message(
-                message["content"]
-            )
-
+            render_user_message(message["content"])
 
     # =====================================================
     # 새로운 질문 처리
@@ -843,9 +792,7 @@ elif page == "💬 규정 챗봇":
 
     if question:
 
-        previous_messages = (
-            st.session_state.messages.copy()
-        )
+        previous_messages = st.session_state.messages.copy()
 
         st.session_state.messages.append(
             {
@@ -854,14 +801,9 @@ elif page == "💬 규정 챗봇":
             }
         )
 
-        render_user_message(
-            question
-        )
+        render_user_message(question)
 
-
-        with st.spinner(
-            "관련 규정을 확인하고 있습니다..."
-        ):
+        with st.spinner("관련 규정을 확인하고 있습니다..."):
 
             try:
 
@@ -873,9 +815,7 @@ elif page == "💬 규정 챗봇":
                     chain=chain,
                 )
 
-                answer = result.get(
-                    "answer"
-                )
+                answer = result.get("answer")
 
                 sources = result.get(
                     "sources",
@@ -887,15 +827,9 @@ elif page == "💬 규정 챗봇":
                     [],
                 )
 
-                if (
-                    not answer
-                    or not str(answer).strip()
-                ):
+                if not answer or not str(answer).strip():
 
-                    raise ValueError(
-                        "응답에 answer가 없습니다."
-                    )
-
+                    raise ValueError("응답에 answer가 없습니다.")
 
                 st.session_state.messages.append(
                     {
@@ -908,7 +842,6 @@ elif page == "💬 규정 챗봇":
 
                 st.rerun()
 
-
             except Exception as e:
 
                 render_randy_error(
@@ -916,22 +849,17 @@ elif page == "💬 규정 챗봇":
                     asset_dir=ASSET_DIR,
                 )
 
-
     # =====================================================
     # 후속 질문
     # =====================================================
 
     if (
         st.session_state.messages
-        and st.session_state.messages[-1].get(
-            "role"
-        ) == "assistant"
+        and st.session_state.messages[-1].get("role") == "assistant"
         and not question
     ):
 
-        follow_col1, follow_col2 = (
-            st.columns(2)
-        )
+        follow_col1, follow_col2 = st.columns(2)
 
         followups = st.session_state.messages[-1].get(
             "followup_questions",
@@ -951,15 +879,11 @@ elif page == "💬 규정 챗봇":
                 if st.button(
                     followup,
                     key=(
-                        f"followup_"
-                        f"{len(st.session_state.messages)}_"
-                        f"{followup}"
+                        f"followup_" f"{len(st.session_state.messages)}_" f"{followup}"
                     ),
                     use_container_width=True,
                 ):
 
-                    st.session_state.pending_question = (
-                        followup
-                    )
+                    st.session_state.pending_question = followup
 
                     st.rerun()
