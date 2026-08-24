@@ -83,24 +83,48 @@ LXpert는 사내 규정 PDF를 전처리·청킹한 뒤 Vector DB에 저장하�
 
 ```mermaid
 flowchart TD
+    %% Global Style Definitions
+    classDef pdf fill:#FFEEEE,stroke:#FF6B6B,stroke-width:2px,color:#333;
+    classDef process fill:#E8F4F8,stroke:#4ECDC4,stroke-width:2px,color:#333;
+    classDef db fill:#FEF9EF,stroke:#FF6B6B,stroke-width:2px,color:#333;
+    classDef user fill:#E3F2FD,stroke:#2196F3,stroke-width:2px,color:#333;
+    classDef llm fill:#F3E5F5,stroke:#AB47BC,stroke-width:2px,color:#333;
+    classDef app fill:#E8F5E9,stroke:#66BB6A,stroke-width:2px,color:#333;
 
-    A["사내 규정 PDF"] --> B["PDF Parsing"]
-    B --> C["규정 구조 기반 Chunking"]
-    C --> D["텍스트 정규화 및 중복 제거"]
-    D --> E["Embedding"]
-    E --> F[("ChromaDB")]
+    subgraph DataIngestion ["  데이터 전처리 & Vector DB 구축 (Offline Pipeline)  "]
+        direction TB
+        A["fa:fa-file-pdf 사내 규정 PDF"]:::pdf --> B["fa:fa-scissors PDF Parsing"]:::process
+        B --> C["fa:fa-sitemap 규정 구조 기반 Chunking"]:::process
+        C --> D["fa:fa-filter 텍스트 정규화 및 중복 제거"]:::process
+        D --> E["fa:fa-network-wire Embedding"]:::process
+        E --> F[("fa:fa-database ChromaDB")]:::db
+    end
 
-    G["사용자 질문"] --> H["Query Rewrite"]
-    H --> I["질문 Embedding"]
-    I --> J["Similarity Retrieval<br/>Top-K = 10"]
-    F --> J
-    J --> K["Neighbor Chunk 확장<br/>Window = ±1"]
-    K --> L["Context 구성"]
-    L --> M["GPT-4o-mini"]
-    M --> N["최종 답변 + 출처"]
+    subgraph RAGPipeline ["  질문 처리 & RAG Pipeline (Online Flow)  "]
+        direction TB
+        G["fa:fa-circle-question 사용자 질문"]:::user --> H["fa:fa-pen-to-square Query Rewrite"]:::process
+        H --> I["fa:fa-network-wire 질문 Embedding"]:::process
+        I --> J["fa:fa-magnifying-glass Similarity Retrieval<br/><b>Top-K = 10</b>"]:::process
+        J --> K["fa:fa-expand Neighbor Chunk 확장<br/><b>Window = ±1</b>"]:::process
+        K --> L["fa:fa-layer-group Context 구성"]:::process
+        L --> M["fa:fa-robot GPT-4o-mini"]:::llm
+        M --> N["fa:fa-comment-dots 최종 답변 + 출처"]:::llm
+    end
 
-    O["Streamlit Web App"] --> G
-    O --> P["Kakao Map 기반<br/>출장 여비 조회"]
+    subgraph Interface ["  사용자 인터페이스 & 서비스  "]
+        O["fa:fa-desktop Streamlit Web App"]:::app
+        P["fa:fa-map-location-dot Kakao Map 기반<br/>출장 여비 조회"]:::app
+    end
+
+    %% Key Dependencies / Connections
+    F -. Retrieval .- J
+    O --> G
+    O --> P
+
+    %% Subgraph Styling
+    style DataIngestion fill:#FAFAFA,stroke:#BDBDBD,stroke-dasharray: 5 5,color:#555
+    style RAGPipeline fill:#FAFAFA,stroke:#BDBDBD,stroke-dasharray: 5 5,color:#555
+    style Interface fill:#F5F5F5,stroke:#9E9E9E,stroke-dasharray: 5 5,color:#555
 ```
 
 ### RAG 처리 흐름
