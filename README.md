@@ -321,9 +321,9 @@ uv run python evaluation/evaluate_retriever.py
 
 | 이름 | 역할 | 담당 | GitHub |
 | --- | --- | --- | --- |
-| 이범준 | PM | M0 기획 · 일정 · M9 시연 · M8 통합 앱 · 시각화| github.com/beomjunlee0427 |
-| 조현영 | 데이터 | M1 수집 · M2 전처리 · M3 분석 · M8 통합 앱 · 시각화| github.com/nyoungs00 |
-| 이유진 | RAG | M4 적재 · M5 체인 · M6·M7 평가 · M8 통합 앱 · 시각화| github.com/Leeyoujin0312 |
+| 이범준 | PM | 기획 · 일정 · 통합 앱 · 시각화 · 시연| github.com/beomjunlee0427 |
+| 조현영 | 데이터 | 수집 · 전처리 · 분석 · 통합 앱 · 시각화| github.com/nyoungs00 |
+| 이유진 | RAG | 적재 · 체인 · 평가 · 통합 앱 · 시각화| github.com/Leeyoujin0312 |
 
 ## 11. 회고 (KPT)
 
